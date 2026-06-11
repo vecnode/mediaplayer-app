@@ -1,0 +1,32 @@
+# Build output (keep data folder placeholder)
+bin/*
+!bin/data/
+!bin/data/**
+
+obj/
+
+# Compiled binaries and libraries
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Temporary and logs
+*.log
+*.tmp
+*.swp
+*~
+
+# OS noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# VS Code: track shared build/debug config, ignore local-only files
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
