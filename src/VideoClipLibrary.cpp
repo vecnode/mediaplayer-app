@@ -105,6 +105,16 @@ std::size_t VideoClipLibrary::nextIndex(std::size_t currentIndex) const {
 	return (currentIndex + 1) % clips.size();
 }
 
+std::size_t VideoClipLibrary::previousIndex(std::size_t currentIndex) const {
+	if (clips.empty()) {
+		return 0;
+	}
+	if (currentIndex == 0) {
+		return clips.size() - 1;
+	}
+	return currentIndex - 1;
+}
+
 void VideoClipLibrary::scan() {
 	clips.clear();
 	searchLog.clear();

@@ -1,24 +1,21 @@
 #pragma once
 
-#include "VideoClipLibrary.h"
+#include "IClipSource.h"
+#include "VideoRenderer.h"
 #include "ofMain.h"
 #include "ofVideoPlayer.h"
 
 #include <cstddef>
+#include <functional>
 #include <limits>
 
 /// High-performance dual-buffer video playback engine.
 ///
-/// Ping-pong architecture:
-///   - Two ofVideoPlayer slots (active + standby).
-///   - Standby silently preloads the next playlist item.
-///   - skipToNext() swaps instantly when prefetch is ready; otherwise sync-loads.
-///
-/// Platform decode/render policy lives in PlatformVideo; this class owns transport
-/// state, slot management, and prefetch scheduling.
+/// Ping-pong architecture with async standby prefetch. The standby slot often
+/// still holds the previous clip after a forward swap, enabling instant backward
+/// switches without a reload when indices align.
 class VideoPlaybackEngine {
 public:
-	/// Result of a clip change — useful for UI/logging extensions.
 	enum class SwitchMethod {
 		None,
 		PrefetchSwap,
@@ -31,14 +28,18 @@ public:
 		std::size_t index = 0;
 	};
 
+	using SwitchHandler = std::function<void(const SwitchResult&)>;
+
 	void setup();
-	void attachLibrary(const VideoClipLibrary* library);
+	void attachClipSource(const IClipSource* source);
+	void setSwitchHandler(SwitchHandler handler);
 
 	void update();
 	void draw(const ofRectangle& bounds) const;
 
-	bool openIndex(std::size_t index, bool primePreviewFrame = true);
+	bool openIndex(std::size_t index, bool primePreviewFrame = true, bool emitSwitchEvent = false);
 	SwitchResult skipToNext();
+	SwitchResult skipToPrevious();
 
 	void play();
 	void stop();
@@ -49,18 +50,31 @@ public:
 	const VideoClip& currentClip() const;
 
 private:
+	enum class PrefetchLoadState {
+		Idle,
+		Loading
+	};
+
 	static constexpr std::size_t kSlotCount = 2;
-	static constexpr std::size_t kInvalidPreloadIndex = std::numeric_limits<std::size_t>::max();
+	static constexpr std::size_t kInvalidClipIndex = std::numeric_limits<std::size_t>::max();
 	static constexpr int kPreloadRetryCooldownFrames = 120;
+	static constexpr int kActiveLoadGraceFrames = 45;
+	static constexpr int kStandbyPumpIntervalFrames = 2;
+	static constexpr int kAsyncPrefetchTimeoutFrames = 600;
 
 	void ensureSlotConfigured(int slotIndex);
-	bool loadClipIntoSlot(int slotIndex, std::size_t clipIndex, bool logLoad);
-	void preloadNextClip();
+	bool loadClipIntoSlotSync(int slotIndex, std::size_t clipIndex, bool logLoad);
+	void beginAsyncLoadIntoSlot(int slotIndex, std::size_t clipIndex);
+	void tickAsyncPrefetch();
+	void schedulePrefetch();
 	void invalidatePreload();
-	bool isPreloadReady(std::size_t expectedIndex) const;
+	bool isStandbyReadyFor(std::size_t expectedIndex) const;
 	void silenceStandby();
-	void swapToPrefetchedClip(std::size_t nextIndex);
+	SwitchResult skipToIndex(std::size_t targetIndex);
+	void swapToStandbyClip(std::size_t clipIndex);
 	void applyTransportAfterSwitch(bool wasPlaying);
+	void notifySwitch(const SwitchResult& result);
+	void markActiveLoadGrace();
 
 	int standbySlotIndex() const { return 1 - activeSlotIndex; }
 	ofVideoPlayer& activePlayer() { return slots[activeSlotIndex]; }
@@ -68,13 +82,22 @@ private:
 	ofVideoPlayer& standbyPlayer() { return slots[standbySlotIndex()]; }
 	const ofVideoPlayer& standbyPlayer() const { return slots[standbySlotIndex()]; }
 
-	const VideoClipLibrary* clipLibrary = nullptr;
+	const IClipSource* clipSource = nullptr;
+	SwitchHandler switchHandler;
+
+	mutable VideoRenderer renderer;
 
 	ofVideoPlayer slots[kSlotCount];
 	bool slotsConfigured[kSlotCount] = {false, false};
-	int activeSlotIndex = 0;
+	std::size_t slotsClipIndex[kSlotCount] = {kInvalidClipIndex, kInvalidClipIndex};
 
+	int activeSlotIndex = 0;
 	std::size_t currentClipIndex = 0;
-	std::size_t preloadedIndex = kInvalidPreloadIndex;
+
+	PrefetchLoadState prefetchLoadState = PrefetchLoadState::Idle;
+	std::size_t prefetchTargetIndex = kInvalidClipIndex;
 	int preloadRetryCooldown = 0;
+	int activeLoadGraceFrames = 0;
+	int prefetchLoadAttempts = 0;
+	int frameCounter = 0;
 };

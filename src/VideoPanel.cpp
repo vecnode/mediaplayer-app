@@ -1,9 +1,6 @@
 /*
  * media-player-cpp — VideoPanel
  * Copyright (c) vecnode 2026
- *
- * Thin facade over VideoClipLibrary + VideoPlaybackEngine.
- * ofApp depends on this class; extend playback by modifying the engine/library layers.
  */
 
 #include "VideoPanel.h"
@@ -16,11 +13,30 @@ void VideoPanel::syncLoadedPath() {
 	}
 }
 
+void VideoPanel::onClipSwitched(const VideoPlaybackEngine::SwitchResult& result) {
+	if (!result.success) {
+		return;
+	}
+
+	syncLoadedPath();
+
+	if (clipChangedHandler) {
+		clipChangedHandler();
+	}
+}
+
+void VideoPanel::setClipChangedHandler(ClipChangedHandler handler) {
+	clipChangedHandler = std::move(handler);
+}
+
 void VideoPanel::setup() {
 	engine.setup();
 
 	library.scan();
-	engine.attachLibrary(&library);
+	engine.attachClipSource(&library);
+	engine.setSwitchHandler([this](const VideoPlaybackEngine::SwitchResult& result) {
+		onClipSwitched(result);
+	});
 
 	if (library.empty()) {
 		ofLogError("VideoPanel") << "No playable video found. Searched: " << library.getSearchLog();
@@ -44,18 +60,15 @@ void VideoPanel::stop() {
 }
 
 void VideoPanel::cycleNext() {
-	const auto result = engine.skipToNext();
-	if (result.success) {
-		syncLoadedPath();
-	}
+	engine.skipToNext();
+}
+
+void VideoPanel::cyclePrevious() {
+	engine.skipToPrevious();
 }
 
 bool VideoPanel::openClipAtIndex(std::size_t index, bool primePreviewFrame) {
-	if (!engine.openIndex(index, primePreviewFrame)) {
-		return false;
-	}
-	syncLoadedPath();
-	return true;
+	return engine.openIndex(index, primePreviewFrame, true);
 }
 
 void VideoPanel::update() {

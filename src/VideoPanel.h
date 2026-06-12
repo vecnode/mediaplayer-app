@@ -1,13 +1,13 @@
 #pragma once
 
+#include "IClipSource.h"
 #include "VideoClipLibrary.h"
 #include "VideoPlaybackEngine.h"
 #include "ofMain.h"
+#include <functional>
+#include <string>
 
-/// Application-facing video panel: composes playlist discovery + playback engine.
-///
-/// Keeps a stable, minimal API for ofApp while playback internals remain extensible
-/// via VideoClipLibrary (source) and VideoPlaybackEngine (transport/render).
+/// Composes playlist source + playback engine (stable facade for ofApp / controller).
 class VideoPanel {
 public:
 	void setup();
@@ -18,6 +18,7 @@ public:
 	void play();
 	void stop();
 	void cycleNext();
+	void cyclePrevious();
 	bool openClipAtIndex(std::size_t index, bool primePreviewFrame = true);
 
 	bool isLoaded() const { return engine.isLoaded(); }
@@ -27,14 +28,21 @@ public:
 	std::size_t getClipCount() const { return library.size(); }
 	std::size_t getCurrentIndex() const { return engine.currentIndex(); }
 
-	/// Direct access for future features (subtitles sync, OSC, etc.).
+	IClipSource& getClipSource() { return library; }
+	const IClipSource& getClipSource() const { return library; }
 	VideoClipLibrary& getLibrary() { return library; }
 	const VideoClipLibrary& getLibrary() const { return library; }
 	VideoPlaybackEngine& getEngine() { return engine; }
 	const VideoPlaybackEngine& getEngine() const { return engine; }
 
+	using ClipChangedHandler = std::function<void()>;
+	void setClipChangedHandler(ClipChangedHandler handler);
+
 private:
 	void syncLoadedPath();
+	void onClipSwitched(const VideoPlaybackEngine::SwitchResult& result);
+
+	ClipChangedHandler clipChangedHandler;
 
 	VideoClipLibrary library;
 	VideoPlaybackEngine engine;

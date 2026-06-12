@@ -29,6 +29,7 @@ All responses are JSON. Commands run on the main thread (same as the GUI).
 | Play | `POST` | `/api/play` | — |
 | Stop | `POST` | `/api/stop` | — |
 | Next Video | `POST` | `/api/next` | — |
+| — | `POST` | `/api/previous` | — |
 | Subtitles | `POST` | `/api/subtitles` | `{"enabled": true}` or `false` |
 | — | `POST` | `/api/clips/{index}` | — (0-based index, opens paused preview) |
 
@@ -60,7 +61,11 @@ curl -X POST http://127.0.0.1:8080/api/clips/0
 ## Architecture
 
 ```
-HTTP / GUI  →  MediaPlayerController  →  VideoPanel  →  VideoPlaybackEngine
+HTTP / GUI  →  MediaPlayerController  →  VideoPanel
+                                              ├── IClipSource (VideoClipLibrary)
+                                              └── VideoPlaybackEngine
+                                                    ├── async dual-slot prefetch
+                                                    └── VideoRenderer (scaled GPU texture draw)
                                       ↘  SubtitlesOverlay
 ```
 

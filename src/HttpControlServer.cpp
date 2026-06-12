@@ -100,7 +100,7 @@ void HttpControlServer::setup(int listenPort, MediaPlayerController* mediaContro
 	ofLogNotice("HttpControlServer") << "  GET  /api/status";
 	ofLogNotice("HttpControlServer") << "  GET  /api/clips";
 	ofLogNotice("HttpControlServer") << "  GET  /api/health";
-	ofLogNotice("HttpControlServer") << "  POST /api/play | /api/stop | /api/next | /api/subtitles";
+	ofLogNotice("HttpControlServer") << "  POST /api/play | /api/stop | /api/next | /api/previous | /api/subtitles";
 	ofLogNotice("HttpControlServer") << "  POST /api/clips/{index}";
 }
 
@@ -246,6 +246,13 @@ void HttpControlServer::handleRequest(int clientId, const ParsedRequest& request
 
 	if (path == "/api/next" && method == "POST") {
 		controller->nextClip();
+		ofJson payload = {{"ok", true}, {"status", statusToJson(controller->getStatus())}};
+		sendJson(clientId, 200, "OK", payload.dump());
+		return;
+	}
+
+	if (path == "/api/previous" && method == "POST") {
+		controller->previousClip();
 		ofJson payload = {{"ok", true}, {"status", statusToJson(controller->getStatus())}};
 		sendJson(clientId, 200, "OK", payload.dump());
 		return;

@@ -8,6 +8,10 @@
 void MediaPlayerController::setup(VideoPanel* panel, SubtitlesOverlay* subtitles) {
 	videoPanel = panel;
 	subtitlesOverlay = subtitles;
+
+	if (videoPanel) {
+		videoPanel->setClipChangedHandler([this]() { syncSubtitleText(); });
+	}
 }
 
 void MediaPlayerController::syncSubtitleText() {
@@ -41,7 +45,13 @@ void MediaPlayerController::nextClip() {
 		return;
 	}
 	videoPanel->cycleNext();
-	syncSubtitleText();
+}
+
+void MediaPlayerController::previousClip() {
+	if (!videoPanel) {
+		return;
+	}
+	videoPanel->cyclePrevious();
 }
 
 bool MediaPlayerController::openClipAtIndex(std::size_t index) {
@@ -51,7 +61,6 @@ bool MediaPlayerController::openClipAtIndex(std::size_t index) {
 	if (!videoPanel->openClipAtIndex(index)) {
 		return false;
 	}
-	syncSubtitleText();
 	return true;
 }
 

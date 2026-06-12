@@ -7,6 +7,7 @@
 #include "PlatformVideo.h"
 
 void ofApp::setup() {
+	// Uncapped loop: VSync + frame caps caused stutter with MF on this stack.
 	ofSetVerticalSync(false);
 	ofSetFrameRate(0);
 	ofBackground(0);

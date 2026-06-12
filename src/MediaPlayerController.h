@@ -31,6 +31,7 @@ public:
 	void play();
 	void stop();
 	void nextClip();
+	void previousClip();
 	bool openClipAtIndex(std::size_t index);
 
 	bool setSubtitlesEnabled(bool enabled);

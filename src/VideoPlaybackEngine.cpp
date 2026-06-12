@@ -1,9 +1,6 @@
 /*
  * media-player-cpp — VideoPlaybackEngine
  * Copyright (c) vecnode 2026
- *
- * Dual-player prefetch keeps the next clip decoded in the standby slot so
- * skipToNext() can swap instantly instead of blocking on Media Foundation load().
  */
 
 #include "VideoPlaybackEngine.h"
@@ -13,8 +10,22 @@ void VideoPlaybackEngine::setup() {
 	ensureSlotConfigured(activeSlotIndex);
 }
 
-void VideoPlaybackEngine::attachLibrary(const VideoClipLibrary* library) {
-	clipLibrary = library;
+void VideoPlaybackEngine::attachClipSource(const IClipSource* source) {
+	clipSource = source;
+}
+
+void VideoPlaybackEngine::setSwitchHandler(SwitchHandler handler) {
+	switchHandler = std::move(handler);
+}
+
+void VideoPlaybackEngine::notifySwitch(const SwitchResult& result) {
+	if (switchHandler) {
+		switchHandler(result);
+	}
+}
+
+void VideoPlaybackEngine::markActiveLoadGrace() {
+	activeLoadGraceFrames = kActiveLoadGraceFrames;
 }
 
 void VideoPlaybackEngine::ensureSlotConfigured(int slotIndex) {
@@ -28,18 +39,21 @@ void VideoPlaybackEngine::ensureSlotConfigured(int slotIndex) {
 }
 
 void VideoPlaybackEngine::invalidatePreload() {
-	preloadedIndex = kInvalidPreloadIndex;
+	prefetchLoadState = PrefetchLoadState::Idle;
+	prefetchTargetIndex = kInvalidClipIndex;
+	prefetchLoadAttempts = 0;
 }
 
-bool VideoPlaybackEngine::isPreloadReady(std::size_t expectedIndex) const {
-	if (preloadedIndex != expectedIndex) {
+bool VideoPlaybackEngine::isStandbyReadyFor(std::size_t expectedIndex) const {
+	if (slotsClipIndex[standbySlotIndex()] != expectedIndex) {
 		return false;
 	}
 
 	const auto& standby = standbyPlayer();
 	return standby.isLoaded()
 		&& standby.getWidth() > 0
-		&& standby.getHeight() > 0;
+		&& standby.getHeight() > 0
+		&& prefetchLoadState != PrefetchLoadState::Loading;
 }
 
 void VideoPlaybackEngine::silenceStandby() {
@@ -51,24 +65,26 @@ void VideoPlaybackEngine::silenceStandby() {
 	standbyPlayer().setPaused(true);
 }
 
-bool VideoPlaybackEngine::loadClipIntoSlot(int slotIndex, std::size_t clipIndex, bool logLoad) {
-	if (!clipLibrary || clipIndex >= clipLibrary->size()) {
+bool VideoPlaybackEngine::loadClipIntoSlotSync(int slotIndex, std::size_t clipIndex, bool logLoad) {
+	if (!clipSource || clipIndex >= clipSource->size()) {
 		return false;
 	}
 
 	ensureSlotConfigured(slotIndex);
 
-	const VideoClip& clip = clipLibrary->clipAt(clipIndex);
+	const VideoClip& clip = clipSource->clipAt(clipIndex);
 	of::filesystem::path absPath = clip.absolutePath;
 	absPath.make_preferred();
 
 	if (!slots[slotIndex].load(PlatformVideo::loadPath(absPath))) {
 		ofLogWarning("VideoPlaybackEngine") << "Failed to load " << clip.absolutePath;
+		slotsClipIndex[slotIndex] = kInvalidClipIndex;
 		return false;
 	}
 
 	slots[slotIndex].setLoopState(OF_LOOP_NORMAL);
 	slots[slotIndex].setVolume(1.0f);
+	slotsClipIndex[slotIndex] = clipIndex;
 
 	if (logLoad) {
 		ofLogNotice("VideoPlaybackEngine") << "Loaded " << clip.displayName
@@ -78,29 +94,62 @@ bool VideoPlaybackEngine::loadClipIntoSlot(int slotIndex, std::size_t clipIndex,
 	return true;
 }
 
-bool VideoPlaybackEngine::openIndex(std::size_t index, bool primePreviewFrame) {
-	if (!clipLibrary || index >= clipLibrary->size()) {
-		return false;
+void VideoPlaybackEngine::beginAsyncLoadIntoSlot(int slotIndex, std::size_t clipIndex) {
+	if (!clipSource || clipIndex >= clipSource->size()) {
+		return;
 	}
 
-	ensureSlotConfigured(activeSlotIndex);
-	invalidatePreload();
+	ensureSlotConfigured(slotIndex);
 
-	if (!loadClipIntoSlot(activeSlotIndex, index, true)) {
-		return false;
-	}
+	const VideoClip& clip = clipSource->clipAt(clipIndex);
+	of::filesystem::path absPath = clip.absolutePath;
+	absPath.make_preferred();
 
-	currentClipIndex = index;
+	prefetchLoadState = PrefetchLoadState::Loading;
+	prefetchTargetIndex = clipIndex;
+	prefetchLoadAttempts = 0;
+	slotsClipIndex[slotIndex] = kInvalidClipIndex;
 
-	if (primePreviewFrame) {
-		PlatformVideo::primeFirstFrame(activePlayer());
-	}
+	slots[slotIndex].loadAsync(PlatformVideo::loadPath(absPath));
 
-	return true;
+	ofLogVerbose("VideoPlaybackEngine") << "Async prefetch started: " << clip.displayName;
 }
 
-void VideoPlaybackEngine::preloadNextClip() {
-	if (!clipLibrary || clipLibrary->size() < 2 || !activePlayer().isLoaded()) {
+void VideoPlaybackEngine::tickAsyncPrefetch() {
+	if (prefetchLoadState != PrefetchLoadState::Loading || !clipSource) {
+		return;
+	}
+
+	const int standbySlot = standbySlotIndex();
+	standbyPlayer().update();
+	++prefetchLoadAttempts;
+
+	if (!standbyPlayer().isLoaded()
+		|| standbyPlayer().getWidth() <= 0
+		|| standbyPlayer().getHeight() <= 0) {
+
+		if (prefetchLoadAttempts >= kAsyncPrefetchTimeoutFrames) {
+			ofLogWarning("VideoPlaybackEngine") << "Async prefetch timed out for index "
+				<< prefetchTargetIndex;
+			invalidatePreload();
+			preloadRetryCooldown = kPreloadRetryCooldownFrames;
+		}
+		return;
+	}
+
+	standbyPlayer().setLoopState(OF_LOOP_NORMAL);
+	standbyPlayer().setVolume(1.0f);
+	slotsClipIndex[standbySlot] = prefetchTargetIndex;
+	silenceStandby();
+	prefetchLoadState = PrefetchLoadState::Idle;
+	prefetchLoadAttempts = 0;
+
+	ofLogVerbose("VideoPlaybackEngine") << "Async prefetch ready: "
+		<< clipSource->clipAt(prefetchTargetIndex).displayName;
+}
+
+void VideoPlaybackEngine::schedulePrefetch() {
+	if (!clipSource || clipSource->size() < 2 || !activePlayer().isLoaded()) {
 		return;
 	}
 
@@ -109,33 +158,66 @@ void VideoPlaybackEngine::preloadNextClip() {
 		return;
 	}
 
-	const std::size_t nextIndex = clipLibrary->nextIndex(currentClipIndex);
-	if (isPreloadReady(nextIndex)) {
+	if (activeLoadGraceFrames > 0) {
+		--activeLoadGraceFrames;
 		return;
 	}
 
-	if (!loadClipIntoSlot(standbySlotIndex(), nextIndex, false)) {
+	const std::size_t nextIndex = clipSource->nextIndex(currentClipIndex);
+
+	if (isStandbyReadyFor(nextIndex)) {
+		return;
+	}
+
+	if (prefetchLoadState == PrefetchLoadState::Loading) {
+		if (prefetchTargetIndex == nextIndex) {
+			return;
+		}
 		invalidatePreload();
-		preloadRetryCooldown = kPreloadRetryCooldownFrames;
-		return;
 	}
 
-	preloadedIndex = nextIndex;
-	silenceStandby();
-
-	ofLogVerbose("VideoPlaybackEngine") << "Prefetched " << clipLibrary->clipAt(nextIndex).displayName;
+	beginAsyncLoadIntoSlot(standbySlotIndex(), nextIndex);
 }
 
-void VideoPlaybackEngine::swapToPrefetchedClip(std::size_t nextIndex) {
+bool VideoPlaybackEngine::openIndex(std::size_t index, bool primePreviewFrame, bool emitSwitchEvent) {
+	if (!clipSource || index >= clipSource->size()) {
+		return false;
+	}
+
+	invalidatePreload();
+
+	if (!loadClipIntoSlotSync(activeSlotIndex, index, true)) {
+		return false;
+	}
+
+	currentClipIndex = index;
+	markActiveLoadGrace();
+
+	if (primePreviewFrame) {
+		PlatformVideo::primeFirstFrame(activePlayer());
+	}
+
+	if (emitSwitchEvent) {
+		SwitchResult result;
+		result.success = true;
+		result.method = SwitchMethod::SyncLoad;
+		result.index = index;
+		notifySwitch(result);
+	}
+
+	return true;
+}
+
+void VideoPlaybackEngine::swapToStandbyClip(std::size_t clipIndex) {
 	activeSlotIndex = standbySlotIndex();
-	currentClipIndex = nextIndex;
+	currentClipIndex = clipIndex;
 
 	activePlayer().setVolume(1.0f);
 	activePlayer().setLoopState(OF_LOOP_NORMAL);
 	invalidatePreload();
 
 	ofLogNotice("VideoPlaybackEngine") << "Switched to "
-		<< clipLibrary->clipAt(nextIndex).displayName << " (prefetched)";
+		<< clipSource->clipAt(clipIndex).displayName << " (prefetched)";
 }
 
 void VideoPlaybackEngine::applyTransportAfterSwitch(bool wasPlaying) {
@@ -147,30 +229,44 @@ void VideoPlaybackEngine::applyTransportAfterSwitch(bool wasPlaying) {
 	}
 }
 
-VideoPlaybackEngine::SwitchResult VideoPlaybackEngine::skipToNext() {
+VideoPlaybackEngine::SwitchResult VideoPlaybackEngine::skipToIndex(std::size_t targetIndex) {
 	SwitchResult result;
 
-	if (!clipLibrary || clipLibrary->empty()) {
+	if (!clipSource || clipSource->empty() || targetIndex >= clipSource->size()) {
 		return result;
 	}
 
 	const bool wasPlaying = activePlayer().isPlaying();
-	const std::size_t nextIndex = clipLibrary->nextIndex(currentClipIndex);
 
-	if (isPreloadReady(nextIndex)) {
-		swapToPrefetchedClip(nextIndex);
+	if (isStandbyReadyFor(targetIndex)) {
+		swapToStandbyClip(targetIndex);
 		result.method = SwitchMethod::PrefetchSwap;
 		result.success = true;
-	} else if (!openIndex(nextIndex, false)) {
+	} else if (!openIndex(targetIndex, false)) {
 		return result;
 	} else {
 		result.method = SwitchMethod::SyncLoad;
 		result.success = true;
 	}
 
-	result.index = nextIndex;
+	result.index = targetIndex;
 	applyTransportAfterSwitch(wasPlaying);
+	notifySwitch(result);
 	return result;
+}
+
+VideoPlaybackEngine::SwitchResult VideoPlaybackEngine::skipToNext() {
+	if (!clipSource || clipSource->empty()) {
+		return {};
+	}
+	return skipToIndex(clipSource->nextIndex(currentClipIndex));
+}
+
+VideoPlaybackEngine::SwitchResult VideoPlaybackEngine::skipToPrevious() {
+	if (!clipSource || clipSource->empty()) {
+		return {};
+	}
+	return skipToIndex(clipSource->previousIndex(currentClipIndex));
 }
 
 void VideoPlaybackEngine::play() {
@@ -196,35 +292,32 @@ bool VideoPlaybackEngine::isPlaying() const {
 
 const VideoClip& VideoPlaybackEngine::currentClip() const {
 	static const VideoClip kEmpty;
-	if (!clipLibrary) {
+	if (!clipSource) {
 		return kEmpty;
 	}
-	return clipLibrary->clipAt(currentClipIndex);
+	return clipSource->clipAt(currentClipIndex);
 }
 
 void VideoPlaybackEngine::update() {
+	++frameCounter;
+
 	if (activePlayer().isLoaded()) {
 		activePlayer().update();
 	}
 
-	if (standbyPlayer().isLoaded()) {
-		standbyPlayer().update();
+	if (prefetchLoadState == PrefetchLoadState::Loading) {
+		tickAsyncPrefetch();
+	} else if (standbyPlayer().isLoaded()) {
+		const bool deferStandbyPump = activeLoadGraceFrames > 0
+			|| (activePlayer().isPlaying() && (frameCounter % kStandbyPumpIntervalFrames) != 0);
+		if (!deferStandbyPump) {
+			standbyPlayer().update();
+		}
 	}
 
-	preloadNextClip();
+	schedulePrefetch();
 }
 
 void VideoPlaybackEngine::draw(const ofRectangle& bounds) const {
-	if (!activePlayer().isLoaded()) {
-		return;
-	}
-
-	const ofTexture& tex = activePlayer().getTexture();
-	if (tex.isAllocated()) {
-		ofSetColor(255);
-		tex.draw(bounds);
-		return;
-	}
-
-	activePlayer().draw(bounds.x, bounds.y, bounds.width, bounds.height);
+	renderer.draw(activePlayer(), bounds);
 }
