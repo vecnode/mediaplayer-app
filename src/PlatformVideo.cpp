@@ -11,13 +11,44 @@
 
 namespace PlatformVideo {
 
+namespace {
+
+#ifdef TARGET_WIN32
+void tuneMediaFoundationPlayer(const std::shared_ptr<ofBaseVideoPlayer>& backend) {
+	auto mf = std::dynamic_pointer_cast<ofMediaFoundationPlayer>(backend);
+	if (!mf) {
+		return;
+	}
+
+	// DX11 / DXGI shared texture path — avoids CPU pixel copies in ofVideoPlayer::update().
+	mf->setUsingHWAccel(true);
+}
+
+bool hasPresentableFrame(const ofVideoPlayer& player) {
+	return player.isLoaded()
+		&& player.getWidth() > 0
+		&& player.getHeight() > 0
+		&& (player.isFrameNew() || player.getTexture().isAllocated());
+}
+#endif
+
+} // namespace
+
 void configurePlayer(ofVideoPlayer& player) {
+	// Prefer the backend's internal GL/DX texture; ofVideoPlayer only uploads pixels when needed.
 	player.setUseTexture(true);
 
 #ifdef TARGET_WIN32
-	// MSYS2 links DirectShow by default; MF handles H.264 mp4 natively on Windows 10+.
-	player.setPlayer(std::make_shared<ofMediaFoundationPlayer>());
-	ofLogNotice("PlatformVideo") << "Video backend: Media Foundation (Windows)";
+	// Non-const getPlayer() side-effects: it creates ofDirectShowPlayer when empty.
+	const auto& backend = static_cast<const ofVideoPlayer&>(player).getPlayer();
+	if (!std::dynamic_pointer_cast<ofMediaFoundationPlayer>(backend)) {
+		auto mf = std::make_shared<ofMediaFoundationPlayer>();
+		tuneMediaFoundationPlayer(mf);
+		player.setPlayer(mf);
+	} else {
+		tuneMediaFoundationPlayer(backend);
+	}
+	ofLogNotice("PlatformVideo") << "Video backend: Media Foundation (Windows, HW texture path)";
 #else
 	ofLogNotice("PlatformVideo") << "Video backend: openFrameworks default";
 #endif
@@ -25,10 +56,10 @@ void configurePlayer(ofVideoPlayer& player) {
 
 of::filesystem::path loadPath(const of::filesystem::path& absolutePath) {
 #ifdef TARGET_WIN32
-	// Windows backends expect a full native path when launched from the project folder.
-	return absolutePath;
+	of::filesystem::path path = absolutePath;
+	path.make_preferred();
+	return path;
 #else
-	// GStreamer / AVFoundation accept absolute paths; OF resolves them consistently.
 	return ofToDataPathFS(absolutePath, true);
 #endif
 }
@@ -39,9 +70,10 @@ void primeFirstFrame(ofVideoPlayer& player) {
 	}
 
 #ifdef TARGET_WIN32
-	// Media Foundation rejects seek/firstFrame before playback has started.
 	player.setPaused(true);
-	for (int i = 0; i < 15; ++i) {
+
+	// MF delivers the first frame asynchronously after Load().
+	for (int i = 0; i < 120 && !hasPresentableFrame(player); ++i) {
 		player.update();
 	}
 #else

@@ -6,13 +6,13 @@
 /// Platform-specific video player setup and playback helpers.
 namespace PlatformVideo {
 
-/// Select the best backend and enable GPU texture upload.
+/// Select the best backend and enable GPU texture upload (once per ofVideoPlayer).
 void configurePlayer(ofVideoPlayer& player);
 
 /// Path to pass to ofVideoPlayer::load() for a discovered absolute file.
 of::filesystem::path loadPath(const of::filesystem::path& absolutePath);
 
-/// Show frame 0 while paused (behavior differs by backend).
+/// Decode and hold frame 0 while paused.
 void primeFirstFrame(ofVideoPlayer& player);
 
 /// Stop playback and return to a paused preview frame.

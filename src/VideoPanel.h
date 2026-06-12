@@ -29,9 +29,9 @@ public:
 private:
 	void scanDataFolder();
 	bool loadAtIndex(std::size_t index);
-	void primeFirstFrame();
 
 	ofVideoPlayer player;
+	bool playerConfigured = false;
 	std::vector<std::string> videoPaths; ///< Absolute paths discovered on disk.
 	std::size_t currentIndex = 0;
 	std::string loadedPath;

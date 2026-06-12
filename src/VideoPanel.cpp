@@ -148,7 +148,11 @@ void VideoPanel::scanDataFolder() {
 }
 
 void VideoPanel::setup() {
-	PlatformVideo::configurePlayer(player);
+	if (!playerConfigured) {
+		PlatformVideo::configurePlayer(player);
+		playerConfigured = true;
+	}
+
 	scanDataFolder();
 
 	if (videoPaths.empty()) {
