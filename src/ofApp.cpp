@@ -7,7 +7,7 @@
 #include "PlatformVideo.h"
 
 void ofApp::setup() {
-	// Uncapped loop + no vsync: MF drives frame timing; the app pumps decode events as fast as possible.
+	// Uncapped loop + no vsync: MF drives A/V timing; we pump decode events as fast as possible.
 	ofSetVerticalSync(false);
 	ofSetFrameRate(0);
 	ofBackground(0);

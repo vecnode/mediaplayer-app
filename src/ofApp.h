@@ -7,6 +7,8 @@
 /// Application entry point for the media player.
 ///
 /// Owns a full-window VideoPanel and an ofxGui control panel.
+/// The main loop runs uncapped (frame rate 0, vsync off) so Media Foundation
+/// decode events are pumped as quickly as possible; MF handles A/V clocking.
 class ofApp : public ofBaseApp {
 public:
 	void setup() override;

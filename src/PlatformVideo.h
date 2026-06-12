@@ -4,6 +4,9 @@
 #include "ofVideoPlayer.h"
 
 /// Platform-specific video player setup and playback helpers.
+///
+/// On Windows (MSYS2) the default OF backend is DirectShow, which cannot decode
+/// H.264 MP4 reliably. configurePlayer() installs ofMediaFoundationPlayer instead.
 namespace PlatformVideo {
 
 /// Select the best backend and enable GPU texture upload (once per ofVideoPlayer).
@@ -12,7 +15,7 @@ void configurePlayer(ofVideoPlayer& player);
 /// Path to pass to ofVideoPlayer::load() for a discovered absolute file.
 of::filesystem::path loadPath(const of::filesystem::path& absolutePath);
 
-/// Decode and hold frame 0 while paused.
+/// Decode and hold frame 0 while paused (preview / stopped transport).
 void primeFirstFrame(ofVideoPlayer& player);
 
 /// Stop playback and return to a paused preview frame.

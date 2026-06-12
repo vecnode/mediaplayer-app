@@ -1,6 +1,9 @@
 /*
  * media-player-cpp — PlatformVideo
  * Copyright (c) vecnode 2026
+ *
+ * Windows playback uses Media Foundation with DX11 hardware decode and a shared
+ * GPU texture path. Non-Windows builds use the openFrameworks default backend.
  */
 
 #include "PlatformVideo.h"
@@ -14,6 +17,8 @@ namespace PlatformVideo {
 namespace {
 
 #ifdef TARGET_WIN32
+constexpr int kPrimeFramePollMax = 30; ///< Short poll in primeFirstFrame(); full decode continues in update().
+
 void tuneMediaFoundationPlayer(const std::shared_ptr<ofBaseVideoPlayer>& backend) {
 	auto mf = std::dynamic_pointer_cast<ofMediaFoundationPlayer>(backend);
 	if (!mf) {
@@ -39,7 +44,8 @@ void configurePlayer(ofVideoPlayer& player) {
 	player.setUseTexture(true);
 
 #ifdef TARGET_WIN32
-	// Non-const getPlayer() side-effects: it creates ofDirectShowPlayer when empty.
+	// IMPORTANT: non-const getPlayer() side-effects — it creates ofDirectShowPlayer when empty.
+	// Always inspect the backend through the const overload before deciding to replace it.
 	const auto& backend = static_cast<const ofVideoPlayer&>(player).getPlayer();
 	if (!std::dynamic_pointer_cast<ofMediaFoundationPlayer>(backend)) {
 		auto mf = std::make_shared<ofMediaFoundationPlayer>();
@@ -65,6 +71,7 @@ void configurePlayer(ofVideoPlayer& player) {
 
 of::filesystem::path loadPath(const of::filesystem::path& absolutePath) {
 #ifdef TARGET_WIN32
+	// MF expects native absolute paths; ofToDataPathFS is unreliable when cwd != exe dir.
 	of::filesystem::path path = absolutePath;
 	path.make_preferred();
 	return path;
@@ -79,10 +86,10 @@ void primeFirstFrame(ofVideoPlayer& player) {
 	}
 
 #ifdef TARGET_WIN32
+	// MF cannot seek before playback starts; pause and poll for the first decoded frame.
 	player.setPaused(true);
 
-	// MF delivers the first frame asynchronously after Load(); keep this short (non-blocking).
-	for (int i = 0; i < 30 && !hasPresentableFrame(player); ++i) {
+	for (int i = 0; i < kPrimeFramePollMax && !hasPresentableFrame(player); ++i) {
 		player.update();
 	}
 #else
@@ -101,6 +108,7 @@ void stopPlayback(ofVideoPlayer& player) {
 	}
 
 #ifdef TARGET_WIN32
+	// Pause in place — MF stop()+seek(0) is slow and can fail before first play.
 	player.setPaused(true);
 #else
 	player.stop();
