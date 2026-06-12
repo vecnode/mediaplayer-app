@@ -50,6 +50,14 @@ void VideoPanel::cycleNext() {
 	}
 }
 
+bool VideoPanel::openClipAtIndex(std::size_t index, bool primePreviewFrame) {
+	if (!engine.openIndex(index, primePreviewFrame)) {
+		return false;
+	}
+	syncLoadedPath();
+	return true;
+}
+
 void VideoPanel::update() {
 	engine.update();
 }

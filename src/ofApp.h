@@ -1,5 +1,7 @@
 #pragma once
 
+#include "HttpControlServer.h"
+#include "MediaPlayerController.h"
 #include "SubtitlesOverlay.h"
 #include "VideoPanel.h"
 #include "ofMain.h"
@@ -7,7 +9,8 @@
 
 /// Application entry point for the media player.
 ///
-/// Owns a full-window VideoPanel, optional SubtitlesOverlay, and an ofxGui panel.
+/// Owns playback (VideoPanel), subtitles, GUI, and the HTTP control API.
+/// GUI and HTTP both route through MediaPlayerController.
 class ofApp : public ofBaseApp {
 public:
 	void setup() override;
@@ -21,8 +24,10 @@ private:
 	void onCyclePressed();
 	void onStopPressed();
 	void onSubtitlesToggled(bool& value);
-	void refreshStatusLabel();
-	void syncSubtitleText();
+	void refreshGuiFromController();
+
+	MediaPlayerController controller;
+	HttpControlServer httpServer;
 
 	VideoPanel videoPanel;
 	SubtitlesOverlay subtitles;

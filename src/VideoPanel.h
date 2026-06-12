@@ -18,6 +18,7 @@ public:
 	void play();
 	void stop();
 	void cycleNext();
+	bool openClipAtIndex(std::size_t index, bool primePreviewFrame = true);
 
 	bool isLoaded() const { return engine.isLoaded(); }
 	bool isPlaying() const { return engine.isPlaying(); }

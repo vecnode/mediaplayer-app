@@ -17,6 +17,12 @@ void ofApp::setup() {
 
 	panelBounds.set(0, 0, ofGetWidth(), ofGetHeight());
 
+	subtitles.setup();
+	videoPanel.setup();
+
+	controller.setup(&videoPanel, &subtitles);
+	httpServer.setup(HttpControlServer::kDefaultPort, &controller);
+
 	playButton.addListener(this, &ofApp::onPlayPressed);
 	cycleButton.addListener(this, &ofApp::onCyclePressed);
 	stopButton.addListener(this, &ofApp::onStopPressed);
@@ -29,14 +35,12 @@ void ofApp::setup() {
 	gui.add(subtitlesToggle.setup("Subtitles", false));
 	gui.add(statusLabel.setup("clip", ""));
 
-	subtitles.setup();
-	syncSubtitleText();
-
-	videoPanel.setup();
-	refreshStatusLabel();
+	refreshGuiFromController();
 }
 
 void ofApp::exit() {
+	httpServer.shutdown();
+
 	playButton.removeListener(this, &ofApp::onPlayPressed);
 	cycleButton.removeListener(this, &ofApp::onCyclePressed);
 	stopButton.removeListener(this, &ofApp::onStopPressed);
@@ -44,46 +48,42 @@ void ofApp::exit() {
 }
 
 void ofApp::onPlayPressed() {
-	videoPanel.play();
-	refreshStatusLabel();
+	controller.play();
+	refreshGuiFromController();
 }
 
 void ofApp::onCyclePressed() {
-	videoPanel.cycleNext();
-	syncSubtitleText();
-	refreshStatusLabel();
+	controller.nextClip();
+	refreshGuiFromController();
 }
 
 void ofApp::onStopPressed() {
-	videoPanel.stop();
-	refreshStatusLabel();
+	controller.stop();
+	refreshGuiFromController();
 }
 
 void ofApp::onSubtitlesToggled(bool& value) {
-	subtitles.setEnabled(value);
+	controller.setSubtitlesEnabled(value);
+	refreshGuiFromController();
 }
 
-void ofApp::syncSubtitleText() {
-	if (videoPanel.isLoaded()) {
-		subtitles.setText(videoPanel.getLoadedPath());
-	} else {
-		subtitles.setText("Sample subtitle");
-	}
-}
+void ofApp::refreshGuiFromController() {
+	subtitlesToggle = controller.isSubtitlesEnabled();
 
-void ofApp::refreshStatusLabel() {
-	if (!videoPanel.isLoaded()) {
+	const MediaPlayerStatus status = controller.getStatus();
+	if (!status.loaded) {
 		statusLabel = "no clip loaded";
 		return;
 	}
 
-	const std::string state = videoPanel.isPlaying() ? "playing" : "stopped";
-	statusLabel = ofToString(videoPanel.getCurrentIndex() + 1) + "/"
-		+ ofToString(videoPanel.getClipCount()) + "  "
-		+ videoPanel.getLoadedPath() + "  (" + state + ")";
+	const std::string transport = status.playing ? "playing" : "stopped";
+	statusLabel = ofToString(status.clipIndex + 1) + "/"
+		+ ofToString(status.clipCount) + "  "
+		+ status.clipName + "  (" + transport + ")";
 }
 
 void ofApp::update() {
+	httpServer.update();
 	videoPanel.update();
 }
 
