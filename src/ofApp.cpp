@@ -6,6 +6,13 @@
 #include "ofApp.h"
 #include "PlatformVideo.h"
 
+ofRectangle ofApp::mediaBoundsForWindow(int w, int h) {
+	constexpr float kMediaScale = 0.6f;
+	const float mediaW = w * kMediaScale;
+	const float mediaH = h * kMediaScale;
+	return ofRectangle((w - mediaW) * 0.5f, (h - mediaH) * 0.5f, mediaW, mediaH);
+}
+
 void ofApp::setup() {
 	// Uncapped loop: VSync + frame caps caused stutter with MF on this stack.
 	ofSetVerticalSync(false);
@@ -16,7 +23,7 @@ void ofApp::setup() {
 	PlatformVideo::configureDataPathRoot();
 #endif
 
-	panelBounds.set(0, 0, ofGetWidth(), ofGetHeight());
+	panelBounds = mediaBoundsForWindow(ofGetWidth(), ofGetHeight());
 
 	subtitles.setup();
 	videoPanel.setup();
@@ -96,8 +103,8 @@ void ofApp::draw() {
 	if (!videoPanel.isLoaded()) {
 		ofSetColor(255);
 		const std::string msg = videoPanel.getClipCount() > 0
-			? "Video(s) found but failed to load. Check console."
-			: "No video found. Searched:";
+			? "Media found but failed to load. Check console."
+			: "No media found. Searched:";
 		ofDrawBitmapStringHighlight(msg, 20, ofGetHeight() - 56);
 		ofDrawBitmapStringHighlight(videoPanel.getSearchLog(), 20, ofGetHeight() - 40);
 	}
@@ -106,5 +113,5 @@ void ofApp::draw() {
 }
 
 void ofApp::windowResized(int w, int h) {
-	panelBounds.set(0, 0, w, h);
+	panelBounds = mediaBoundsForWindow(w, h);
 }

@@ -19,3 +19,12 @@ void VideoRenderer::draw(const ofVideoPlayer& player, const ofRectangle& bounds)
 
 	player.draw(bounds.x, bounds.y, bounds.width, bounds.height);
 }
+
+void VideoRenderer::draw(const ofImage& image, const ofRectangle& bounds) {
+	if (!image.isAllocated()) {
+		return;
+	}
+
+	ofSetColor(255);
+	image.draw(bounds);
+}

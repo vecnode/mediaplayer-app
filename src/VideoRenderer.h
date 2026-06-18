@@ -11,4 +11,5 @@
 class VideoRenderer {
 public:
 	void draw(const ofVideoPlayer& player, const ofRectangle& bounds);
+	void draw(const ofImage& image, const ofRectangle& bounds);
 };

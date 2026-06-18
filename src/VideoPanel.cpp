@@ -39,12 +39,12 @@ void VideoPanel::setup() {
 	});
 
 	if (library.empty()) {
-		ofLogError("VideoPanel") << "No playable video found. Searched: " << library.getSearchLog();
+		ofLogError("VideoPanel") << "No playable media found. Searched: " << library.getSearchLog();
 		return;
 	}
 
 	if (!engine.openIndex(0, true)) {
-		ofLogError("VideoPanel") << "Failed to load first video";
+		ofLogError("VideoPanel") << "Failed to load first media file";
 		return;
 	}
 

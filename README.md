@@ -11,6 +11,14 @@ make Release
 cd bin && ./media-player-cpp.exe
 ```
 
+`make Release` copies required MinGW64 runtime DLLs (including `glfw3.dll` and `libfreetype-6.dll`) into `bin/`, so the app also runs when launched from Explorer or PowerShell — not only inside the MSYS2 shell.
+
+If you built before this step existed, run:
+
+```bash
+bash scripts/copy_msys2_dlls.sh
+```
+
 Place H.264 MP4 clips in `bin/data/`.
 
 ## HTTP control API

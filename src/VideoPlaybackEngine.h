@@ -63,6 +63,9 @@ private:
 	static constexpr int kAsyncPrefetchTimeoutFrames = 600;
 
 	void ensureSlotConfigured(int slotIndex);
+	void clearSlot(int slotIndex);
+	bool isSlotImage(int slotIndex) const;
+	bool isSlotLoaded(int slotIndex) const;
 	bool loadClipIntoSlotSync(int slotIndex, std::size_t clipIndex, bool logLoad);
 	void beginAsyncLoadIntoSlot(int slotIndex, std::size_t clipIndex);
 	void tickAsyncPrefetch();
@@ -88,6 +91,8 @@ private:
 	mutable VideoRenderer renderer;
 
 	ofVideoPlayer slots[kSlotCount];
+	ofImage imageSlots[kSlotCount];
+	bool slotsIsImage[kSlotCount] = {false, false};
 	bool slotsConfigured[kSlotCount] = {false, false};
 	std::size_t slotsClipIndex[kSlotCount] = {kInvalidClipIndex, kInvalidClipIndex};
 

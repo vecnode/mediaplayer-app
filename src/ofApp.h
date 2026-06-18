@@ -20,6 +20,8 @@ public:
 	void windowResized(int w, int h) override;
 
 private:
+	static ofRectangle mediaBoundsForWindow(int w, int h);
+
 	void onPlayPressed();
 	void onCyclePressed();
 	void onStopPressed();

@@ -76,10 +76,14 @@ OF_ROOT = ../../..
 # $(PROJECT_ROOT)/bin/libs directory.  The following LDFLAGS tell the linker to
 # add a runtime path to search for those shared libraries, since they aren't 
 # incorporated directly into the final executable application binary.
-# Media Foundation backend — MinGW on Windows only (see MediaFoundationBackend.cpp)
 ifeq ($(OS),Windows_NT)
 PROJECT_LDFLAGS += -ld3d11 -ldxgi -lxaudio2_8
+PROJECT_AFTER = copy-msys2-runtime-dlls
 endif
+
+.PHONY: copy-msys2-runtime-dlls
+copy-msys2-runtime-dlls:
+	@bash scripts/copy_msys2_dlls.sh
 
 ################################################################################
 # PROJECT DEFINES

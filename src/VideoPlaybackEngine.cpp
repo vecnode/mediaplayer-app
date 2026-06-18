@@ -38,6 +38,39 @@ void VideoPlaybackEngine::ensureSlotConfigured(int slotIndex) {
 	}
 }
 
+void VideoPlaybackEngine::clearSlot(int slotIndex) {
+	if (slotIndex < 0 || static_cast<std::size_t>(slotIndex) >= kSlotCount) {
+		return;
+	}
+
+	slots[slotIndex].close();
+	imageSlots[slotIndex].clear();
+	slotsIsImage[slotIndex] = false;
+	slotsClipIndex[slotIndex] = kInvalidClipIndex;
+}
+
+bool VideoPlaybackEngine::isSlotImage(int slotIndex) const {
+	if (slotIndex < 0 || static_cast<std::size_t>(slotIndex) >= kSlotCount) {
+		return false;
+	}
+	return slotsIsImage[slotIndex];
+}
+
+bool VideoPlaybackEngine::isSlotLoaded(int slotIndex) const {
+	if (slotIndex < 0 || static_cast<std::size_t>(slotIndex) >= kSlotCount) {
+		return false;
+	}
+
+	if (slotsIsImage[slotIndex]) {
+		return imageSlots[slotIndex].isAllocated()
+			&& imageSlots[slotIndex].getWidth() > 0
+			&& imageSlots[slotIndex].getHeight() > 0;
+	}
+
+	const auto& player = slots[slotIndex];
+	return player.isLoaded() && player.getWidth() > 0 && player.getHeight() > 0;
+}
+
 void VideoPlaybackEngine::invalidatePreload() {
 	prefetchLoadState = PrefetchLoadState::Idle;
 	prefetchTargetIndex = kInvalidClipIndex;
@@ -45,19 +78,20 @@ void VideoPlaybackEngine::invalidatePreload() {
 }
 
 bool VideoPlaybackEngine::isStandbyReadyFor(std::size_t expectedIndex) const {
-	if (slotsClipIndex[standbySlotIndex()] != expectedIndex) {
+	const int standbySlot = standbySlotIndex();
+	if (slotsClipIndex[standbySlot] != expectedIndex) {
 		return false;
 	}
 
-	const auto& standby = standbyPlayer();
-	return standby.isLoaded()
-		&& standby.getWidth() > 0
-		&& standby.getHeight() > 0
-		&& prefetchLoadState != PrefetchLoadState::Loading;
+	if (prefetchLoadState == PrefetchLoadState::Loading) {
+		return false;
+	}
+
+	return isSlotLoaded(standbySlot);
 }
 
 void VideoPlaybackEngine::silenceStandby() {
-	if (!standbyPlayer().isLoaded()) {
+	if (isSlotImage(standbySlotIndex()) || !standbyPlayer().isLoaded()) {
 		return;
 	}
 
@@ -70,20 +104,39 @@ bool VideoPlaybackEngine::loadClipIntoSlotSync(int slotIndex, std::size_t clipIn
 		return false;
 	}
 
-	ensureSlotConfigured(slotIndex);
+	clearSlot(slotIndex);
 
 	const VideoClip& clip = clipSource->clipAt(clipIndex);
 	of::filesystem::path absPath = clip.absolutePath;
 	absPath.make_preferred();
 
+	if (clip.mediaType == ClipMediaType::Image) {
+		if (!imageSlots[slotIndex].load(absPath.string())) {
+			ofLogWarning("VideoPlaybackEngine") << "Failed to load image " << clip.absolutePath;
+			return false;
+		}
+
+		slotsIsImage[slotIndex] = true;
+		slotsClipIndex[slotIndex] = clipIndex;
+
+		if (logLoad) {
+			ofLogNotice("VideoPlaybackEngine") << "Loaded image " << clip.displayName
+				<< " (" << imageSlots[slotIndex].getWidth() << "x" << imageSlots[slotIndex].getHeight() << ")";
+		}
+
+		return true;
+	}
+
+	ensureSlotConfigured(slotIndex);
+
 	if (!slots[slotIndex].load(PlatformVideo::loadPath(absPath))) {
 		ofLogWarning("VideoPlaybackEngine") << "Failed to load " << clip.absolutePath;
-		slotsClipIndex[slotIndex] = kInvalidClipIndex;
 		return false;
 	}
 
 	slots[slotIndex].setLoopState(OF_LOOP_NORMAL);
 	slots[slotIndex].setVolume(1.0f);
+	slotsIsImage[slotIndex] = false;
 	slotsClipIndex[slotIndex] = clipIndex;
 
 	if (logLoad) {
@@ -99,16 +152,21 @@ void VideoPlaybackEngine::beginAsyncLoadIntoSlot(int slotIndex, std::size_t clip
 		return;
 	}
 
+	const VideoClip& clip = clipSource->clipAt(clipIndex);
+	if (clip.mediaType == ClipMediaType::Image) {
+		loadClipIntoSlotSync(slotIndex, clipIndex, false);
+		return;
+	}
+
 	ensureSlotConfigured(slotIndex);
 
-	const VideoClip& clip = clipSource->clipAt(clipIndex);
 	of::filesystem::path absPath = clip.absolutePath;
 	absPath.make_preferred();
 
+	clearSlot(slotIndex);
 	prefetchLoadState = PrefetchLoadState::Loading;
 	prefetchTargetIndex = clipIndex;
 	prefetchLoadAttempts = 0;
-	slotsClipIndex[slotIndex] = kInvalidClipIndex;
 
 	slots[slotIndex].loadAsync(PlatformVideo::loadPath(absPath));
 
@@ -149,7 +207,7 @@ void VideoPlaybackEngine::tickAsyncPrefetch() {
 }
 
 void VideoPlaybackEngine::schedulePrefetch() {
-	if (!clipSource || clipSource->size() < 2 || !activePlayer().isLoaded()) {
+	if (!clipSource || clipSource->size() < 2 || !isSlotLoaded(activeSlotIndex)) {
 		return;
 	}
 
@@ -193,7 +251,7 @@ bool VideoPlaybackEngine::openIndex(std::size_t index, bool primePreviewFrame, b
 	currentClipIndex = index;
 	markActiveLoadGrace();
 
-	if (primePreviewFrame) {
+	if (primePreviewFrame && !isSlotImage(activeSlotIndex)) {
 		PlatformVideo::primeFirstFrame(activePlayer());
 	}
 
@@ -212,8 +270,10 @@ void VideoPlaybackEngine::swapToStandbyClip(std::size_t clipIndex) {
 	activeSlotIndex = standbySlotIndex();
 	currentClipIndex = clipIndex;
 
-	activePlayer().setVolume(1.0f);
-	activePlayer().setLoopState(OF_LOOP_NORMAL);
+	if (!isSlotImage(activeSlotIndex)) {
+		activePlayer().setVolume(1.0f);
+		activePlayer().setLoopState(OF_LOOP_NORMAL);
+	}
 	invalidatePreload();
 
 	ofLogNotice("VideoPlaybackEngine") << "Switched to "
@@ -221,6 +281,10 @@ void VideoPlaybackEngine::swapToStandbyClip(std::size_t clipIndex) {
 }
 
 void VideoPlaybackEngine::applyTransportAfterSwitch(bool wasPlaying) {
+	if (isSlotImage(activeSlotIndex)) {
+		return;
+	}
+
 	if (wasPlaying) {
 		activePlayer().setPaused(false);
 		activePlayer().play();
@@ -270,7 +334,7 @@ VideoPlaybackEngine::SwitchResult VideoPlaybackEngine::skipToPrevious() {
 }
 
 void VideoPlaybackEngine::play() {
-	if (!activePlayer().isLoaded()) {
+	if (!isSlotLoaded(activeSlotIndex) || isSlotImage(activeSlotIndex)) {
 		return;
 	}
 
@@ -279,14 +343,22 @@ void VideoPlaybackEngine::play() {
 }
 
 void VideoPlaybackEngine::stop() {
+	if (isSlotImage(activeSlotIndex)) {
+		return;
+	}
+
 	PlatformVideo::stopPlayback(activePlayer());
 }
 
 bool VideoPlaybackEngine::isLoaded() const {
-	return activePlayer().isLoaded();
+	return isSlotLoaded(activeSlotIndex);
 }
 
 bool VideoPlaybackEngine::isPlaying() const {
+	if (isSlotImage(activeSlotIndex)) {
+		return false;
+	}
+
 	return activePlayer().isPlaying();
 }
 
@@ -301,13 +373,13 @@ const VideoClip& VideoPlaybackEngine::currentClip() const {
 void VideoPlaybackEngine::update() {
 	++frameCounter;
 
-	if (activePlayer().isLoaded()) {
+	if (!isSlotImage(activeSlotIndex) && activePlayer().isLoaded()) {
 		activePlayer().update();
 	}
 
 	if (prefetchLoadState == PrefetchLoadState::Loading) {
 		tickAsyncPrefetch();
-	} else if (standbyPlayer().isLoaded()) {
+	} else if (!isSlotImage(standbySlotIndex()) && standbyPlayer().isLoaded()) {
 		const bool deferStandbyPump = activeLoadGraceFrames > 0
 			|| (activePlayer().isPlaying() && (frameCounter % kStandbyPumpIntervalFrames) != 0);
 		if (!deferStandbyPump) {
@@ -319,5 +391,10 @@ void VideoPlaybackEngine::update() {
 }
 
 void VideoPlaybackEngine::draw(const ofRectangle& bounds) const {
+	if (isSlotImage(activeSlotIndex)) {
+		renderer.draw(imageSlots[activeSlotIndex], bounds);
+		return;
+	}
+
 	renderer.draw(activePlayer(), bounds);
 }

@@ -19,6 +19,20 @@ bool isVideoPath(const fs::path& path) {
 		[&](const char* candidate) { return ext == candidate; });
 }
 
+bool isImagePath(const fs::path& path) {
+	static const char* kExtensions[] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tif", ".tiff"};
+	const std::string ext = ofGetExtensionLower(path);
+	return std::any_of(std::begin(kExtensions), std::end(kExtensions),
+		[&](const char* candidate) { return ext == candidate; });
+}
+
+ClipMediaType mediaTypeForPath(const fs::path& path) {
+	if (isVideoPath(path)) {
+		return ClipMediaType::Video;
+	}
+	return ClipMediaType::Image;
+}
+
 bool pathsEquivalent(const fs::path& a, const fs::path& b) {
 	try {
 		return fs::equivalent(a, b);
@@ -143,7 +157,7 @@ void VideoClipLibrary::scan() {
 			}
 
 			const fs::path filePath = entry.path();
-			if (!isVideoPath(filePath)) {
+			if (!isVideoPath(filePath) && !isImagePath(filePath)) {
 				continue;
 			}
 
@@ -157,6 +171,7 @@ void VideoClipLibrary::scan() {
 				VideoClip clip;
 				clip.absolutePath = absPath;
 				clip.displayName = filePath.filename().string();
+				clip.mediaType = mediaTypeForPath(filePath);
 				clips.push_back(std::move(clip));
 				++foundInRoot;
 				ofLogNotice("VideoClipLibrary") << "  found " << filePath.filename().string();
@@ -166,7 +181,7 @@ void VideoClipLibrary::scan() {
 		searchLog += (searchLog.empty() ? "" : " | ")
 			+ formatPathForLog(root) + " (" + ofToString(foundInRoot) + ")";
 		ofLogNotice("VideoClipLibrary") << "Searched " << formatPathForLog(root)
-			<< " -> " << foundInRoot << " video(s)";
+			<< " -> " << foundInRoot << " media file(s)";
 	}
 
 	std::sort(clips.begin(), clips.end(),
@@ -174,5 +189,5 @@ void VideoClipLibrary::scan() {
 			return a.absolutePath < b.absolutePath;
 		});
 
-	ofLogNotice("VideoClipLibrary") << "Total: " << clips.size() << " video(s)";
+	ofLogNotice("VideoClipLibrary") << "Total: " << clips.size() << " media file(s)";
 }

@@ -313,10 +313,9 @@ void HttpControlServer::processClient(int clientId) {
 
 	std::string& buffer = clientBuffers[clientId];
 
-	while (server.getNumReceivedBytes(clientId) > 0) {
-		if (!appendReceivedBytes(clientId, buffer)) {
-			break;
-		}
+	// ofxTCPServer::getNumReceivedBytes() only reflects the last receive call,
+	// not pending socket data — read until the client buffer is drained.
+	while (appendReceivedBytes(clientId, buffer)) {
 	}
 
 	if (buffer.empty()) {
@@ -352,8 +351,6 @@ void HttpControlServer::update() {
 			continue;
 		}
 
-		if (server.getNumReceivedBytes(clientId) > 0) {
-			processClient(clientId);
-		}
+		processClient(clientId);
 	}
 }
