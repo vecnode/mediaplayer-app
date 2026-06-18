@@ -26,9 +26,9 @@ void ofApp::setup() {
 	panelBounds = mediaBoundsForWindow(ofGetWidth(), ofGetHeight());
 
 	subtitles.setup();
-	videoPanel.setup();
+	mediaPanel.setup();
 
-	controller.setup(&videoPanel, &subtitles);
+	controller.setup(&mediaPanel, &subtitles);
 	httpServer.setup(HttpControlServer::kDefaultPort, &controller);
 
 	playButton.addListener(this, &ofApp::onPlayPressed);
@@ -38,7 +38,7 @@ void ofApp::setup() {
 
 	gui.setup("Controls");
 	gui.add(playButton.setup("Play"));
-	gui.add(cycleButton.setup("Next Video"));
+	gui.add(cycleButton.setup("Next"));
 	gui.add(stopButton.setup("Stop"));
 	gui.add(subtitlesToggle.setup("Subtitles", false));
 	gui.add(statusLabel.setup("clip", ""));
@@ -79,34 +79,35 @@ void ofApp::refreshGuiFromController() {
 	subtitlesToggle = controller.isSubtitlesEnabled();
 
 	const MediaPlayerStatus status = controller.getStatus();
+
 	if (!status.loaded) {
 		statusLabel = "no clip loaded";
 		return;
 	}
 
-	const std::string transport = status.playing ? "playing" : "stopped";
+	const std::string state = status.isImage ? "image" : (status.playing ? "playing" : "stopped");
 	statusLabel = ofToString(status.clipIndex + 1) + "/"
 		+ ofToString(status.clipCount) + "  "
-		+ status.clipName + "  (" + transport + ")";
+		+ status.clipName + "  (" + state + ")";
 }
 
 void ofApp::update() {
 	httpServer.update();
-	videoPanel.update();
+	mediaPanel.update();
 }
 
 void ofApp::draw() {
 	ofSetColor(255);
-	videoPanel.draw(panelBounds);
+	mediaPanel.draw(panelBounds);
 	subtitles.draw(panelBounds);
 
-	if (!videoPanel.isLoaded()) {
+	if (!mediaPanel.isLoaded()) {
 		ofSetColor(255);
-		const std::string msg = videoPanel.getClipCount() > 0
+		const std::string msg = mediaPanel.getClipCount() > 0
 			? "Media found but failed to load. Check console."
-			: "No media found. Searched:";
+			: "No media found. Put images/videos in bin/data. Searched:";
 		ofDrawBitmapStringHighlight(msg, 20, ofGetHeight() - 56);
-		ofDrawBitmapStringHighlight(videoPanel.getSearchLog(), 20, ofGetHeight() - 40);
+		ofDrawBitmapStringHighlight(mediaPanel.getSearchLog(), 20, ofGetHeight() - 40);
 	}
 
 	gui.draw();

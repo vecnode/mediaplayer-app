@@ -72,6 +72,7 @@ ofJson statusToJson(const MediaPlayerStatus& status) {
 	return ofJson{
 		{"loaded", status.loaded},
 		{"playing", status.playing},
+		{"isImage", status.isImage},
 		{"clipIndex", status.clipIndex},
 		{"clipCount", status.clipCount},
 		{"clipName", status.clipName},
@@ -223,7 +224,8 @@ void HttpControlServer::handleRequest(int clientId, const ParsedRequest& request
 			payload.push_back({
 				{"index", clip.index},
 				{"name", clip.name},
-				{"path", clip.path}
+				{"path", clip.path},
+				{"mediaType", clip.mediaType}
 			});
 		}
 		sendJson(clientId, 200, "OK", payload.dump());

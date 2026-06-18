@@ -5,63 +5,68 @@
 
 #include "MediaPlayerController.h"
 
-void MediaPlayerController::setup(VideoPanel* panel, SubtitlesOverlay* subtitles) {
-	videoPanel = panel;
+namespace {
+
+const char* mediaTypeLabel(ClipMediaType type) {
+	return type == ClipMediaType::Image ? "image" : "video";
+}
+
+} // namespace
+
+void MediaPlayerController::setup(MediaPanel* panel, SubtitlesOverlay* subtitles) {
+	mediaPanel = panel;
 	subtitlesOverlay = subtitles;
 
-	if (videoPanel) {
-		videoPanel->setClipChangedHandler([this]() { syncSubtitleText(); });
+	if (mediaPanel) {
+		mediaPanel->setClipChangedHandler([this]() { syncSubtitleText(); });
 	}
 }
 
 void MediaPlayerController::syncSubtitleText() {
-	if (!subtitlesOverlay || !videoPanel) {
+	if (!subtitlesOverlay || !mediaPanel) {
 		return;
 	}
 
-	if (videoPanel->isLoaded()) {
-		subtitlesOverlay->setText(videoPanel->getLoadedPath());
+	if (mediaPanel->isLoaded()) {
+		subtitlesOverlay->setText(mediaPanel->getLoadedPath());
 	} else {
 		subtitlesOverlay->setText("Sample subtitle");
 	}
 }
 
 void MediaPlayerController::play() {
-	if (!videoPanel) {
+	if (!mediaPanel || mediaPanel->isCurrentClipImage()) {
 		return;
 	}
-	videoPanel->play();
+	mediaPanel->play();
 }
 
 void MediaPlayerController::stop() {
-	if (!videoPanel) {
+	if (!mediaPanel || mediaPanel->isCurrentClipImage()) {
 		return;
 	}
-	videoPanel->stop();
+	mediaPanel->stop();
 }
 
 void MediaPlayerController::nextClip() {
-	if (!videoPanel) {
+	if (!mediaPanel) {
 		return;
 	}
-	videoPanel->cycleNext();
+	mediaPanel->cycleNext();
 }
 
 void MediaPlayerController::previousClip() {
-	if (!videoPanel) {
+	if (!mediaPanel) {
 		return;
 	}
-	videoPanel->cyclePrevious();
+	mediaPanel->cyclePrevious();
 }
 
 bool MediaPlayerController::openClipAtIndex(std::size_t index) {
-	if (!videoPanel) {
+	if (!mediaPanel) {
 		return false;
 	}
-	if (!videoPanel->openClipAtIndex(index)) {
-		return false;
-	}
-	return true;
+	return mediaPanel->openClipAtIndex(index);
 }
 
 bool MediaPlayerController::setSubtitlesEnabled(bool enabled) {
@@ -76,18 +81,23 @@ bool MediaPlayerController::isSubtitlesEnabled() const {
 	return subtitlesOverlay && subtitlesOverlay->isEnabled();
 }
 
+bool MediaPlayerController::isCurrentClipImage() const {
+	return mediaPanel && mediaPanel->isCurrentClipImage();
+}
+
 MediaPlayerStatus MediaPlayerController::getStatus() const {
 	MediaPlayerStatus status;
 
-	if (!videoPanel) {
+	if (!mediaPanel) {
 		return status;
 	}
 
-	status.loaded = videoPanel->isLoaded();
-	status.playing = videoPanel->isPlaying();
-	status.clipIndex = videoPanel->getCurrentIndex();
-	status.clipCount = videoPanel->getClipCount();
-	status.clipName = videoPanel->getLoadedPath();
+	status.loaded = mediaPanel->isLoaded();
+	status.playing = mediaPanel->isPlaying();
+	status.isImage = mediaPanel->isCurrentClipImage();
+	status.clipIndex = mediaPanel->getCurrentIndex();
+	status.clipCount = mediaPanel->getClipCount();
+	status.clipName = mediaPanel->getLoadedPath();
 	status.subtitlesEnabled = isSubtitlesEnabled();
 
 	return status;
@@ -96,19 +106,20 @@ MediaPlayerStatus MediaPlayerController::getStatus() const {
 std::vector<MediaPlayerClipInfo> MediaPlayerController::getClips() const {
 	std::vector<MediaPlayerClipInfo> clips;
 
-	if (!videoPanel) {
+	if (!mediaPanel) {
 		return clips;
 	}
 
-	const auto& library = videoPanel->getLibrary();
+	const auto& library = mediaPanel->getLibrary();
 	clips.reserve(library.size());
 
 	for (std::size_t i = 0; i < library.size(); ++i) {
-		const VideoClip& clip = library.clipAt(i);
+		const MediaClip& clip = library.clipAt(i);
 		MediaPlayerClipInfo info;
 		info.index = i;
 		info.name = clip.displayName;
 		info.path = clip.absolutePath;
+		info.mediaType = mediaTypeLabel(clip.mediaType);
 		clips.push_back(std::move(info));
 	}
 

@@ -30,3 +30,11 @@ Desktop.ini
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+*.png
+
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff

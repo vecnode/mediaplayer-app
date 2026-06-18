@@ -78,7 +78,9 @@ OF_ROOT = ../../..
 # incorporated directly into the final executable application binary.
 ifeq ($(OS),Windows_NT)
 PROJECT_LDFLAGS += -ld3d11 -ldxgi -lxaudio2_8
-PROJECT_AFTER = copy-msys2-runtime-dlls
+# Copies MinGW DLLs only — does not touch bin/data (your dataset stays intact).
+# PROJECT_AFTER is executed as a shell recipe, not a make target name.
+PROJECT_AFTER = $(MAKE) copy-msys2-runtime-dlls
 endif
 
 .PHONY: copy-msys2-runtime-dlls

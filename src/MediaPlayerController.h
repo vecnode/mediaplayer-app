@@ -1,7 +1,7 @@
 #pragma once
 
+#include "MediaPanel.h"
 #include "SubtitlesOverlay.h"
-#include "VideoPanel.h"
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -10,6 +10,7 @@
 struct MediaPlayerStatus {
 	bool loaded = false;
 	bool playing = false;
+	bool isImage = false;
 	std::size_t clipIndex = 0;
 	std::size_t clipCount = 0;
 	std::string clipName;
@@ -21,12 +22,13 @@ struct MediaPlayerClipInfo {
 	std::size_t index = 0;
 	std::string name;
 	std::string path;
+	std::string mediaType;
 };
 
 /// Shared command layer for GUI, HTTP, and future control surfaces (OSC, etc.).
 class MediaPlayerController {
 public:
-	void setup(VideoPanel* panel, SubtitlesOverlay* subtitles);
+	void setup(MediaPanel* panel, SubtitlesOverlay* subtitles);
 
 	void play();
 	void stop();
@@ -36,6 +38,7 @@ public:
 
 	bool setSubtitlesEnabled(bool enabled);
 	bool isSubtitlesEnabled() const;
+	bool isCurrentClipImage() const;
 
 	MediaPlayerStatus getStatus() const;
 	std::vector<MediaPlayerClipInfo> getClips() const;
@@ -43,6 +46,6 @@ public:
 private:
 	void syncSubtitleText();
 
-	VideoPanel* videoPanel = nullptr;
+	MediaPanel* mediaPanel = nullptr;
 	SubtitlesOverlay* subtitlesOverlay = nullptr;
 };

@@ -2,15 +2,14 @@
 
 #include "HttpControlServer.h"
 #include "MediaPlayerController.h"
+#include "MediaPanel.h"
 #include "SubtitlesOverlay.h"
-#include "VideoPanel.h"
 #include "ofMain.h"
 #include "ofxGui.h"
 
 /// Application entry point for the media player.
 ///
-/// Owns playback (VideoPanel), subtitles, GUI, and the HTTP control API.
-/// GUI and HTTP both route through MediaPlayerController.
+/// Owns playback (MediaPanel), subtitles, GUI, and the HTTP control API.
 class ofApp : public ofBaseApp {
 public:
 	void setup() override;
@@ -31,7 +30,7 @@ private:
 	MediaPlayerController controller;
 	HttpControlServer httpServer;
 
-	VideoPanel videoPanel;
+	MediaPanel mediaPanel;
 	SubtitlesOverlay subtitles;
 	ofRectangle panelBounds;
 
