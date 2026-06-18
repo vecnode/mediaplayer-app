@@ -15,6 +15,7 @@ struct MediaPlayerStatus {
 	std::size_t clipCount = 0;
 	std::string clipName;
 	bool subtitlesEnabled = false;
+	std::string subtitleText;
 };
 
 /// One entry in the playlist exposed over HTTP.
@@ -41,6 +42,7 @@ public:
 	bool isCurrentClipImage() const;
 
 	MediaPlayerStatus getStatus() const;
+	std::string getSubtitleText() const;
 	std::vector<MediaPlayerClipInfo> getClips() const;
 
 private:

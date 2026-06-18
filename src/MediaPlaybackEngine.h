@@ -31,6 +31,7 @@ public:
 	void setup();
 	void attachClipSource(const IClipSource* source);
 	void setSwitchHandler(SwitchHandler handler);
+	void setImageDrawHints(const ImageDrawHints* hints);
 
 	void update();
 	void draw(const ofRectangle& bounds) const;
@@ -86,6 +87,7 @@ private:
 
 	const IClipSource* clipSource = nullptr;
 	SwitchHandler switchHandler;
+	const ImageDrawHints* imageDrawHints = nullptr;
 
 	mutable MediaRenderer renderer;
 

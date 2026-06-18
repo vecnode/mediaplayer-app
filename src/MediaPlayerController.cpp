@@ -27,11 +27,14 @@ void MediaPlayerController::syncSubtitleText() {
 		return;
 	}
 
-	if (mediaPanel->isLoaded()) {
-		subtitlesOverlay->setText(mediaPanel->getLoadedPath());
-	} else {
+	if (!mediaPanel->isLoaded()) {
 		subtitlesOverlay->setText("Sample subtitle");
+		return;
 	}
+
+	const std::string clipName = mediaPanel->getLoadedPath();
+	const std::string preview = mediaPanel->getCorpus().subtitlePreview(clipName);
+	subtitlesOverlay->setText(preview.empty() ? clipName : preview);
 }
 
 void MediaPlayerController::play() {
@@ -99,8 +102,19 @@ MediaPlayerStatus MediaPlayerController::getStatus() const {
 	status.clipCount = mediaPanel->getClipCount();
 	status.clipName = mediaPanel->getLoadedPath();
 	status.subtitlesEnabled = isSubtitlesEnabled();
+	status.subtitleText = getSubtitleText();
 
 	return status;
+}
+
+std::string MediaPlayerController::getSubtitleText() const {
+	if (!mediaPanel || !mediaPanel->isLoaded()) {
+		return {};
+	}
+
+	const std::string clipName = mediaPanel->getLoadedPath();
+	const std::string fullText = mediaPanel->getCorpus().subtitleFull(clipName);
+	return fullText.empty() ? clipName : fullText;
 }
 
 std::vector<MediaPlayerClipInfo> MediaPlayerController::getClips() const {

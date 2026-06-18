@@ -8,8 +8,18 @@
 
 ofRectangle ofApp::mediaBoundsForWindow(int w, int h) {
 	constexpr float kMediaScale = 0.6f;
-	const float mediaW = w * kMediaScale;
-	const float mediaH = h * kMediaScale;
+	constexpr float kAspect = 16.0f / 9.0f;
+
+	const float maxW = w * kMediaScale;
+	const float maxH = h * kMediaScale;
+
+	float mediaW = maxW;
+	float mediaH = mediaW / kAspect;
+	if (mediaH > maxH) {
+		mediaH = maxH;
+		mediaW = mediaH * kAspect;
+	}
+
 	return ofRectangle((w - mediaW) * 0.5f, (h - mediaH) * 0.5f, mediaW, mediaH);
 }
 

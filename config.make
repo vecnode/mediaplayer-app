@@ -83,8 +83,16 @@ PROJECT_LDFLAGS += -ld3d11 -ldxgi -lxaudio2_8
 PROJECT_AFTER = $(MAKE) copy-msys2-runtime-dlls
 endif
 
-.PHONY: copy-msys2-runtime-dlls
-copy-msys2-runtime-dlls:
+ifndef METAAGENT_ROOT
+METAAGENT_ROOT := /c/Users/luisarandas/Documents/Unreal Projects/character2/Plugins/metaagent-ue5-plugin/metaagent
+endif
+PROJECT_CFLAGS += -Isrc/metaagent
+
+.PHONY: sync-metaagent-corpus copy-msys2-runtime-dlls
+sync-metaagent-corpus:
+	@METAAGENT_ROOT="$(METAAGENT_ROOT)" bash scripts/sync_metaagent_corpus.sh
+
+copy-msys2-runtime-dlls: sync-metaagent-corpus
 	@bash scripts/copy_msys2_dlls.sh
 
 ################################################################################

@@ -76,7 +76,8 @@ ofJson statusToJson(const MediaPlayerStatus& status) {
 		{"clipIndex", status.clipIndex},
 		{"clipCount", status.clipCount},
 		{"clipName", status.clipName},
-		{"subtitlesEnabled", status.subtitlesEnabled}
+		{"subtitlesEnabled", status.subtitlesEnabled},
+		{"subtitleText", status.subtitleText}
 	};
 }
 

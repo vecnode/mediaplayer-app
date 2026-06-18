@@ -5,6 +5,14 @@
 
 #include "MediaPanel.h"
 
+namespace {
+
+std::string resolveDataDirectory() {
+	return ofFilePath::getCurrentExeDir() + "data";
+}
+
+} // namespace
+
 void MediaPanel::syncLoadedPath() {
 	if (engine.isLoaded()) {
 		loadedPath = engine.currentClip().displayName;
@@ -13,12 +21,36 @@ void MediaPanel::syncLoadedPath() {
 	}
 }
 
+void MediaPanel::refreshImageDrawHints() {
+	imageDrawHints_ = {};
+
+	if (!engine.isCurrentClipImage() || loadedPath.empty()) {
+		engine.setImageDrawHints(nullptr);
+		return;
+	}
+
+	metaagent::media::IntRect focus {};
+	if (!corpus_.focusRectForClip(loadedPath, engine.currentIndex(), focus)) {
+		engine.setImageDrawHints(nullptr);
+		return;
+	}
+
+	imageDrawHints_.has_focus_rect = true;
+	imageDrawHints_.cover_fit = true;
+	imageDrawHints_.src_x = static_cast<float>(focus.x);
+	imageDrawHints_.src_y = static_cast<float>(focus.y);
+	imageDrawHints_.src_w = static_cast<float>(focus.width);
+	imageDrawHints_.src_h = static_cast<float>(focus.height);
+	engine.setImageDrawHints(&imageDrawHints_);
+}
+
 void MediaPanel::onClipSwitched(const MediaPlaybackEngine::SwitchResult& result) {
 	if (!result.success) {
 		return;
 	}
 
 	syncLoadedPath();
+	refreshImageDrawHints();
 
 	if (clipChangedHandler) {
 		clipChangedHandler();
@@ -31,6 +63,7 @@ void MediaPanel::setClipChangedHandler(ClipChangedHandler handler) {
 
 void MediaPanel::setup() {
 	engine.setup();
+	corpus_.setup(resolveDataDirectory());
 
 	library.scan();
 	engine.attachClipSource(&library);
@@ -49,6 +82,7 @@ void MediaPanel::setup() {
 	}
 
 	syncLoadedPath();
+	refreshImageDrawHints();
 }
 
 void MediaPanel::play() {
@@ -68,7 +102,12 @@ void MediaPanel::cyclePrevious() {
 }
 
 bool MediaPanel::openClipAtIndex(std::size_t index, bool primePreviewFrame) {
-	return engine.openIndex(index, primePreviewFrame, true);
+	const bool opened = engine.openIndex(index, primePreviewFrame, true);
+	if (opened) {
+		syncLoadedPath();
+		refreshImageDrawHints();
+	}
+	return opened;
 }
 
 void MediaPanel::update() {

@@ -3,9 +3,18 @@
 #include "ofMain.h"
 #include "ofVideoPlayer.h"
 
+struct ImageDrawHints {
+	bool has_focus_rect = false;
+	bool cover_fit = false;
+	float src_x = 0.0f;
+	float src_y = 0.0f;
+	float src_w = 0.0f;
+	float src_h = 0.0f;
+};
+
 /// Draws media width-fit, vertically centered; tall content (e.g. A4) is center-cropped.
 class MediaRenderer {
 public:
 	void draw(const ofVideoPlayer& player, const ofRectangle& bounds);
-	void draw(const ofImage& image, const ofRectangle& bounds);
+	void draw(const ofImage& image, const ofRectangle& bounds, const ImageDrawHints* hints = nullptr);
 };

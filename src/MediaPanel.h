@@ -2,7 +2,9 @@
 
 #include "IClipSource.h"
 #include "MediaClipLibrary.h"
+#include "MediaCorpusProvider.h"
 #include "MediaPlaybackEngine.h"
+#include "MediaRenderer.h"
 #include "ofMain.h"
 #include <functional>
 #include <string>
@@ -33,6 +35,8 @@ public:
 	const IClipSource& getClipSource() const { return library; }
 	MediaClipLibrary& getLibrary() { return library; }
 	const MediaClipLibrary& getLibrary() const { return library; }
+	const MediaCorpusProvider& getCorpus() const { return corpus_; }
+	MediaCorpusProvider& getCorpus() { return corpus_; }
 	MediaPlaybackEngine& getEngine() { return engine; }
 	const MediaPlaybackEngine& getEngine() const { return engine; }
 
@@ -41,11 +45,14 @@ public:
 
 private:
 	void syncLoadedPath();
+	void refreshImageDrawHints();
 	void onClipSwitched(const MediaPlaybackEngine::SwitchResult& result);
 
 	ClipChangedHandler clipChangedHandler;
 
 	MediaClipLibrary library;
+	MediaCorpusProvider corpus_;
 	MediaPlaybackEngine engine;
+	ImageDrawHints imageDrawHints_;
 	std::string loadedPath;
 };

@@ -396,9 +396,13 @@ void MediaPlaybackEngine::update() {
 	schedulePrefetch();
 }
 
+void MediaPlaybackEngine::setImageDrawHints(const ImageDrawHints* hints) {
+	imageDrawHints = hints;
+}
+
 void MediaPlaybackEngine::draw(const ofRectangle& bounds) const {
 	if (isSlotImage(activeSlotIndex)) {
-		renderer.draw(imageSlots[activeSlotIndex], bounds);
+		renderer.draw(imageSlots[activeSlotIndex], bounds, imageDrawHints);
 		return;
 	}
 
