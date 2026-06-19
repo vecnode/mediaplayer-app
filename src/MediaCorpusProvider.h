@@ -14,6 +14,7 @@ public:
 
 	const metaagent::media::ImageCorpusEntry* findForClip(const std::string& clipPath) const;
 	std::string subtitlePreview(const std::string& clipPath) const;
+	std::string subtitleSummary(const std::string& clipPath) const;
 	std::string subtitleFull(const std::string& clipPath) const;
 
 	/// Index of a random detected region for the clip (valid bbox only).

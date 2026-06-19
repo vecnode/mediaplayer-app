@@ -338,6 +338,23 @@ MediaPlaybackEngine::SwitchResult MediaPlaybackEngine::skipToPrevious() {
 	return skipToIndex(clipSource->previousIndex(currentClipIndex));
 }
 
+MediaPlaybackEngine::SwitchResult MediaPlaybackEngine::skipToRandom() {
+	if (!clipSource || clipSource->empty()) {
+		return {};
+	}
+
+	const std::size_t count = clipSource->size();
+	if (count == 1) {
+		return skipToIndex(0);
+	}
+
+	std::size_t target = currentClipIndex;
+	while (target == currentClipIndex) {
+		target = static_cast<std::size_t>(ofRandom(static_cast<float>(count)));
+	}
+	return skipToIndex(target);
+}
+
 void MediaPlaybackEngine::play() {
 	if (!isSlotLoaded(activeSlotIndex) || isSlotImage(activeSlotIndex)) {
 		return;

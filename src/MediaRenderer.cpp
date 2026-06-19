@@ -53,6 +53,48 @@ WidthFitLayout widthFitLayout(float mediaW, float mediaH, const ofRectangle& bou
 	return layout;
 }
 
+WidthFitLayout widthFitLayoutOnPoint(
+	float mediaW,
+	float mediaH,
+	const ofRectangle& bounds,
+	float centerX,
+	float centerY) {
+	WidthFitLayout layout;
+
+	if (mediaW <= 0.0f || mediaH <= 0.0f || bounds.width <= 0.0f || bounds.height <= 0.0f) {
+		layout.dest = bounds;
+		layout.srcW = mediaW;
+		layout.srcH = mediaH;
+		return layout;
+	}
+
+	const float scale = bounds.width / mediaW;
+	const float fullDrawH = mediaH * scale;
+
+	layout.dest.x = bounds.x;
+	layout.dest.width = bounds.width;
+	layout.srcX = 0.0f;
+	layout.srcW = mediaW;
+
+	if (fullDrawH <= bounds.height) {
+		layout.dest.height = fullDrawH;
+		layout.dest.y = bounds.y + (bounds.height - fullDrawH) * 0.5f;
+		layout.srcY = 0.0f;
+		layout.srcH = mediaH;
+		return layout;
+	}
+
+	layout.dest.y = bounds.y;
+	layout.dest.height = bounds.height;
+
+	const float visibleMediaH = bounds.height / scale;
+	layout.srcH = visibleMediaH;
+	layout.srcY = centerY - visibleMediaH * 0.5f;
+	layout.srcY = std::max(0.0f, std::min(layout.srcY, mediaH - visibleMediaH));
+
+	return layout;
+}
+
 ofRectangle mapImageRectToScreen(
 	const ofRectangle& dest,
 	float cropSrcX,
@@ -179,6 +221,20 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 		if (hints) {
 			drawDebugRegionForLayout(*hints, bounds, srcX, srcY, srcW, srcH);
 		}
+		return;
+	}
+
+	if (hints && hints->pan_to_region) {
+		const WidthFitLayout layout = widthFitLayoutOnPoint(
+			fullW, fullH, bounds, hints->pan_center_x, hints->pan_center_y);
+		image.drawSubsection(
+			layout.dest.x, layout.dest.y, layout.dest.width, layout.dest.height,
+			layout.srcX, layout.srcY, layout.srcW, layout.srcH);
+
+		drawDebugRegionForLayout(
+			*hints,
+			layout.dest,
+			layout.srcX, layout.srcY, layout.srcW, layout.srcH);
 		return;
 	}
 

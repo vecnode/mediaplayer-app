@@ -16,6 +16,7 @@ public:
 	void update() override;
 	void draw() override;
 	void exit() override;
+	void keyPressed(int key) override;
 	void windowResized(int w, int h) override;
 
 private:
@@ -23,8 +24,12 @@ private:
 
 	void onPlayPressed();
 	void onCyclePressed();
+	void onRandomPressed();
 	void onStopPressed();
 	void onSubtitlesToggled(bool& value);
+	void onRegionBBoxToggled(bool& value);
+	void onRegionFocusToggled(bool& value);
+	void onRegionPanToggled(bool& value);
 	void refreshGuiFromController();
 
 	MediaPlayerController controller;
@@ -37,7 +42,12 @@ private:
 	ofxPanel gui;
 	ofxButton playButton;
 	ofxButton cycleButton;
+	ofxButton randomButton;
 	ofxButton stopButton;
 	ofxToggle subtitlesToggle;
+	ofxToggle regionBBoxToggle;
+	ofxToggle regionFocusToggle;
+	ofxToggle regionPanToggle;
 	ofxLabel statusLabel;
+	bool guiVisible_ = true;
 };

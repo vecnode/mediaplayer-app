@@ -49,7 +49,7 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 	metaagent::media::IntRect regionBbox {};
 	const bool hasRegion = corpus_.regionBboxForClip(
 		loadedPath, selectedRegionIndex_, regionBbox);
-	if (hasRegion) {
+	if (hasRegion && showRegionBBox_) {
 		imageDrawHints_.has_debug_region = true;
 		imageDrawHints_.debug_region_x = static_cast<float>(regionBbox.x);
 		imageDrawHints_.debug_region_y = static_cast<float>(regionBbox.y);
@@ -69,14 +69,21 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 
 	const float viewportAspect = bounds.width / bounds.height;
 	metaagent::media::IntRect focus {};
-	if (corpus_.focusRectForRegion(loadedPath, selectedRegionIndex_, viewportAspect, focus)) {
+	if (regionPanEnabled_ && hasRegion) {
+		imageDrawHints_.pan_to_region = true;
+		imageDrawHints_.pan_center_x = static_cast<float>(regionBbox.x)
+			+ static_cast<float>(regionBbox.width) * 0.5f;
+		imageDrawHints_.pan_center_y = static_cast<float>(regionBbox.y)
+			+ static_cast<float>(regionBbox.height) * 0.5f;
+	} else if (regionFocusEnabled_
+		&& corpus_.focusRectForRegion(loadedPath, selectedRegionIndex_, viewportAspect, focus)) {
 		imageDrawHints_.has_focus_rect = true;
 		imageDrawHints_.cover_fit = true;
 		imageDrawHints_.src_x = static_cast<float>(focus.x);
 		imageDrawHints_.src_y = static_cast<float>(focus.y);
 		imageDrawHints_.src_w = static_cast<float>(focus.width);
 		imageDrawHints_.src_h = static_cast<float>(focus.height);
-	} else if (hasRegion) {
+	} else if (hasRegion && regionFocusEnabled_) {
 		ofLogWarning("MediaPanel") << "Focus crop failed for region "
 			<< selectedRegionIndex_ << " on \"" << loadedPath << "\"";
 	}
@@ -144,6 +151,10 @@ void MediaPanel::cyclePrevious() {
 	engine.skipToPrevious();
 }
 
+void MediaPanel::cycleRandom() {
+	engine.skipToRandom();
+}
+
 bool MediaPanel::openClipAtIndex(std::size_t index, bool primePreviewFrame) {
 	const bool opened = engine.openIndex(index, primePreviewFrame, true);
 	if (opened) {
@@ -165,4 +176,40 @@ void MediaPanel::draw(const ofRectangle& bounds) const {
 		self->refreshImageDrawHints(bounds);
 	}
 	engine.draw(bounds);
+}
+
+void MediaPanel::setShowRegionBBox(bool show) {
+	if (showRegionBBox_ == show) {
+		return;
+	}
+	showRegionBBox_ = show;
+	if (lastDrawBounds_.width > 0.0f) {
+		refreshImageDrawHints(lastDrawBounds_);
+	}
+}
+
+void MediaPanel::setRegionFocusEnabled(bool enabled) {
+	if (regionFocusEnabled_ == enabled) {
+		return;
+	}
+	regionFocusEnabled_ = enabled;
+	if (enabled) {
+		regionPanEnabled_ = false;
+	}
+	if (lastDrawBounds_.width > 0.0f) {
+		refreshImageDrawHints(lastDrawBounds_);
+	}
+}
+
+void MediaPanel::setRegionPanEnabled(bool enabled) {
+	if (regionPanEnabled_ == enabled) {
+		return;
+	}
+	regionPanEnabled_ = enabled;
+	if (enabled) {
+		regionFocusEnabled_ = false;
+	}
+	if (lastDrawBounds_.width > 0.0f) {
+		refreshImageDrawHints(lastDrawBounds_);
+	}
 }

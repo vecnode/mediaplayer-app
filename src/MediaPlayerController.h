@@ -35,11 +35,21 @@ public:
 	void stop();
 	void nextClip();
 	void previousClip();
+	void randomClip();
 	bool openClipAtIndex(std::size_t index);
 
 	bool setSubtitlesEnabled(bool enabled);
+	bool setSubtitleText(const std::string& text);
+	void clearSubtitleOverride();
 	bool isSubtitlesEnabled() const;
 	bool isCurrentClipImage() const;
+
+	bool setShowRegionBBox(bool enabled);
+	bool showRegionBBox() const;
+	bool setRegionFocusEnabled(bool enabled);
+	bool regionFocusEnabled() const;
+	bool setRegionPanEnabled(bool enabled);
+	bool regionPanEnabled() const;
 
 	MediaPlayerStatus getStatus() const;
 	std::string getSubtitleText() const;
@@ -50,4 +60,5 @@ private:
 
 	MediaPanel* mediaPanel = nullptr;
 	SubtitlesOverlay* subtitlesOverlay = nullptr;
+	std::string subtitleOverride_;
 };

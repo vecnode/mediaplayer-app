@@ -17,6 +17,11 @@ struct ImageDrawHints {
 	float debug_region_y = 0.0f;
 	float debug_region_w = 0.0f;
 	float debug_region_h = 0.0f;
+
+	/// Width-fit scale, pan visible window to center on this point (no zoom).
+	bool pan_to_region = false;
+	float pan_center_x = 0.0f;
+	float pan_center_y = 0.0f;
 };
 
 /// Draws media width-fit, vertically centered; tall content (e.g. A4) is center-cropped.

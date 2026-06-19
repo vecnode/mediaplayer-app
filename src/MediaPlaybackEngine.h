@@ -39,6 +39,7 @@ public:
 	bool openIndex(std::size_t index, bool primePreviewFrame = true, bool emitSwitchEvent = false);
 	SwitchResult skipToNext();
 	SwitchResult skipToPrevious();
+	SwitchResult skipToRandom();
 
 	void play();
 	void stop();

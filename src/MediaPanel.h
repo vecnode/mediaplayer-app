@@ -22,6 +22,7 @@ public:
 	void stop();
 	void cycleNext();
 	void cyclePrevious();
+	void cycleRandom();
 	bool openClipAtIndex(std::size_t index, bool primePreviewFrame = true);
 
 	bool isLoaded() const { return engine.isLoaded(); }
@@ -41,6 +42,13 @@ public:
 	MediaPlaybackEngine& getEngine() { return engine; }
 	const MediaPlaybackEngine& getEngine() const { return engine; }
 
+	void setShowRegionBBox(bool show);
+	bool showRegionBBox() const { return showRegionBBox_; }
+	void setRegionFocusEnabled(bool enabled);
+	bool regionFocusEnabled() const { return regionFocusEnabled_; }
+	void setRegionPanEnabled(bool enabled);
+	bool regionPanEnabled() const { return regionPanEnabled_; }
+
 	using ClipChangedHandler = std::function<void()>;
 	void setClipChangedHandler(ClipChangedHandler handler);
 
@@ -58,4 +66,7 @@ private:
 	std::string loadedPath;
 	mutable ofRectangle lastDrawBounds_;
 	std::size_t selectedRegionIndex_ = std::numeric_limits<std::size_t>::max();
+	bool showRegionBBox_ = true;
+	bool regionFocusEnabled_ = true;
+	bool regionPanEnabled_ = false;
 };

@@ -256,6 +256,33 @@ void parse_pdf_sections(const core::String& markdown, core::Array<ImageCorpusEnt
 	}
 }
 
+void parse_summary_sections(const core::String& markdown, core::Array<ImageCorpusEntry>& entries)
+{
+	size_t cursor = 0;
+	while (cursor < markdown.size())
+	{
+		const size_t section_start = markdown.find("## `", cursor);
+		if (section_start == core::String::npos)
+		{
+			break;
+		}
+
+		const size_t next_section = markdown.find("\n## `", section_start + 4);
+		const core::String section = markdown.substr(
+			section_start,
+			next_section == core::String::npos ? core::String::npos : next_section - section_start);
+
+		const core::String file_key = extract_section_file_key(section);
+		if (!file_key.empty())
+		{
+			ImageCorpusEntry* entry = find_or_create_entry(entries, file_key);
+			entry->summary_text = trim_copy(extract_fenced_block(section, "text"));
+		}
+
+		cursor = next_section == core::String::npos ? markdown.size() : next_section + 1;
+	}
+}
+
 bool parse_bbox(const core::String& json, size_t search_from, IntRect& out_bbox)
 {
 	const size_t bbox_index = json.find("\"bbox\"", search_from);
@@ -473,7 +500,15 @@ bool MediaCorpus::load_from_directory(const core::String& data_directory)
 		return false;
 	}
 
-	return load_pair(root + "/PDF_TEXT.md", root + "/OBJS_TEXT.md");
+	const bool loaded = load_pair(root + "/PDF_TEXT.md", root + "/OBJS_TEXT.md");
+	const core::String summary_md = root + "/PDF_TEXT2.md";
+	const core::String summary_markdown = read_text_file(summary_md);
+	if (!summary_markdown.empty())
+	{
+		parse_summary_sections(summary_markdown, entries_);
+	}
+
+	return loaded || !entries_.empty();
 }
 
 const ImageCorpusEntry* MediaCorpus::find_by_file_key(const core::String& file_key) const
@@ -502,6 +537,16 @@ core::String MediaCorpus::subtitle_text_for(const core::String& file_key) const
 		return {};
 	}
 	return entry->ocr_text;
+}
+
+core::String MediaCorpus::summary_text_for(const core::String& file_key) const
+{
+	const ImageCorpusEntry* entry = find_by_file_key(file_key);
+	if (!entry)
+	{
+		return {};
+	}
+	return entry->summary_text;
 }
 
 core::String MediaCorpus::subtitle_preview_for(const core::String& file_key, const std::size_t max_chars) const

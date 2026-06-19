@@ -2,16 +2,14 @@
 
 #include "ofMain.h"
 #include <string>
+#include <vector>
 
-/// Renders a single subtitle line with a black backing plane.
-///
-/// The plane is horizontally centered and vertically anchored at 4/5 of the
-/// draw bounds height (lower fifth of the frame, typical subtitle placement).
+/// Renders wrapped subtitle paragraphs with a semi-transparent backing plane.
 class SubtitlesOverlay {
 public:
 	void setup();
 
-	void draw(const ofRectangle& bounds) const;
+	void draw(const ofRectangle& windowBounds) const;
 
 	void setEnabled(bool enabled);
 	bool isEnabled() const { return enabled; }
@@ -22,13 +20,16 @@ public:
 
 private:
 	bool loadFont();
+	std::vector<std::string> wrapText(float maxWidth) const;
 
 	ofTrueTypeFont font;
 	bool fontLoaded = false;
-	bool enabled = false;
-	std::string text = "Sample subtitle";
+	bool enabled = true;
+	std::string text;
 
-	static constexpr float kVerticalAnchor = 4.f / 5.f;
-	static constexpr float kPadding = 14.f;
-	static constexpr int kFontSize = 36;
+	static constexpr float kWindowWidthFraction = 0.86f;
+	static constexpr float kBottomMargin = 28.f;
+	static constexpr float kPadding = 16.f;
+	static constexpr float kLineSpacing = 6.f;
+	static constexpr int kFontSize = 26;
 };

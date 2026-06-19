@@ -28,6 +28,7 @@ struct ImageCorpusEntry {
 	int32_t image_width = 0;
 	int32_t image_height = 0;
 	core::String ocr_text;
+	core::String summary_text;
 	core::Array<TextRegion> text_regions;
 };
 
@@ -49,6 +50,9 @@ public:
 
 	/// Full OCR text for subtitles / downstream LLM streaming.
 	METAAGENT_API core::String subtitle_text_for(const core::String& file_key) const;
+
+	/// Embedding / agent summary paragraph from PDF_TEXT2.md.
+	METAAGENT_API core::String summary_text_for(const core::String& file_key) const;
 
 	/// Short line for on-screen overlay.
 	METAAGENT_API core::String subtitle_preview_for(

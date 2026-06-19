@@ -263,15 +263,41 @@ void HttpControlServer::handleRequest(int clientId, const ParsedRequest& request
 
 	if (path == "/api/subtitles" && method == "POST") {
 		const ofJson body = ofJson::parse(request.body, nullptr, false);
-		if (body.is_discarded() || !body.contains("enabled") || !body["enabled"].is_boolean()) {
-			sendError(clientId, 400, "Bad Request", "expected JSON body: {\"enabled\": true|false}");
+		if (body.is_discarded()) {
+			sendError(clientId, 400, "Bad Request", "expected JSON body");
 			return;
 		}
 
-		controller->setSubtitlesEnabled(body["enabled"].get<bool>());
+		if (body.contains("enabled")) {
+			if (!body["enabled"].is_boolean()) {
+				sendError(clientId, 400, "Bad Request", "\"enabled\" must be a boolean");
+				return;
+			}
+			controller->setSubtitlesEnabled(body["enabled"].get<bool>());
+		}
+
+		if (body.contains("text")) {
+			if (!body["text"].is_string()) {
+				sendError(clientId, 400, "Bad Request", "\"text\" must be a string");
+				return;
+			}
+			const std::string text = body["text"].get<std::string>();
+			if (text.empty()) {
+				controller->clearSubtitleOverride();
+			} else {
+				controller->setSubtitleText(text);
+			}
+		}
+
+		if (!body.contains("enabled") && !body.contains("text")) {
+			sendError(clientId, 400, "Bad Request", "expected JSON body: {\"enabled\": true|false, \"text\": \"optional\"}");
+			return;
+		}
+
 		ofJson payload = {
 			{"ok", true},
 			{"subtitlesEnabled", controller->isSubtitlesEnabled()},
+			{"subtitleText", controller->getSubtitleText()},
 			{"status", statusToJson(controller->getStatus())}
 		};
 		sendJson(clientId, 200, "OK", payload.dump());

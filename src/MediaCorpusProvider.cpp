@@ -63,6 +63,14 @@ std::string MediaCorpusProvider::subtitlePreview(const std::string& clipPath) co
 	return corpus_.subtitle_preview_for(metaagent::media::corpus_file_key_from_path(clipPath));
 }
 
+std::string MediaCorpusProvider::subtitleSummary(const std::string& clipPath) const {
+	ensureLoaded();
+	if (!loaded_) {
+		return {};
+	}
+	return corpus_.summary_text_for(metaagent::media::corpus_file_key_from_path(clipPath));
+}
+
 std::string MediaCorpusProvider::subtitleFull(const std::string& clipPath) const {
 	ensureLoaded();
 	if (!loaded_) {
