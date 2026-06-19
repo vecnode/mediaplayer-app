@@ -88,11 +88,14 @@ METAAGENT_ROOT := /c/Users/luisarandas/Documents/Unreal Projects/character2/Plug
 endif
 PROJECT_CFLAGS += -Isrc/metaagent
 
-.PHONY: sync-metaagent-corpus copy-msys2-runtime-dlls
+.PHONY: sync-metaagent-corpus copy-msys2-runtime-dlls sync-corpus
 sync-metaagent-corpus:
 	@METAAGENT_ROOT="$(METAAGENT_ROOT)" bash scripts/sync_metaagent_corpus.sh
 
-copy-msys2-runtime-dlls: sync-metaagent-corpus
+# Optional: run manually when metaagent corpus sources change (not every Release).
+sync-corpus: sync-metaagent-corpus
+
+copy-msys2-runtime-dlls:
 	@bash scripts/copy_msys2_dlls.sh
 
 ################################################################################

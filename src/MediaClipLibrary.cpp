@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <system_error>
+#include <unordered_set>
 
 namespace {
 
@@ -36,14 +37,6 @@ ClipMediaType mediaTypeForPath(const fs::path& path) {
 	return ClipMediaType::Image;
 }
 
-bool pathsEquivalent(const fs::path& a, const fs::path& b) {
-	try {
-		return fs::equivalent(a, b);
-	} catch (...) {
-		return fs::absolute(a) == fs::absolute(b);
-	}
-}
-
 fs::path normalizeDir(fs::path path) {
 	if (path.empty()) {
 		return path;
@@ -69,16 +62,29 @@ std::string formatPathForLog(const fs::path& path) {
 	return copy.string();
 }
 
+std::string pathDedupKey(const fs::path& path) {
+	std::error_code ec;
+	fs::path abs = fs::absolute(path, ec);
+	if (ec) {
+		abs = path;
+	}
+	abs.make_preferred();
+	std::string key = abs.string();
+	std::transform(key.begin(), key.end(), key.begin(),
+		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	return key;
+}
+
 std::vector<fs::path> buildSearchRoots() {
 	const fs::path exeDir = normalizeDir(ofFilePath::getCurrentExeDirFS());
 	std::vector<fs::path> roots;
 
+	// Only scan bin/data — not the whole bin/ tree (DLLs, exe, etc.).
 	roots.push_back(exeDir / "data");
-	roots.push_back(exeDir);
 
 #ifndef NDEBUG
-	roots.push_back(normalizeDir(fs::path("bin") / "data"));
-	roots.push_back(normalizeDir("bin"));
+	const fs::path devData = normalizeDir(fs::path("bin") / "data");
+	roots.push_back(devData);
 #endif
 
 	return roots;
@@ -86,6 +92,7 @@ std::vector<fs::path> buildSearchRoots() {
 
 std::vector<fs::path> existingUniqueRoots(const std::vector<fs::path>& candidates) {
 	std::vector<fs::path> roots;
+	std::unordered_set<std::string> seen;
 
 	for (auto root : candidates) {
 		root = normalizeDir(root);
@@ -94,10 +101,8 @@ std::vector<fs::path> existingUniqueRoots(const std::vector<fs::path>& candidate
 			continue;
 		}
 
-		const bool alreadyListed = std::any_of(roots.begin(), roots.end(),
-			[&](const fs::path& existing) { return pathsEquivalent(existing, root); });
-
-		if (!alreadyListed) {
+		const std::string key = pathDedupKey(root);
+		if (seen.insert(key).second) {
 			roots.push_back(root);
 		}
 	}
@@ -105,7 +110,11 @@ std::vector<fs::path> existingUniqueRoots(const std::vector<fs::path>& candidate
 	return roots;
 }
 
-void collectMediaFiles(const fs::path& root, std::vector<MediaClip>& clips, std::size_t& foundInRoot) {
+void collectMediaFiles(
+	const fs::path& root,
+	std::vector<MediaClip>& clips,
+	std::unordered_set<std::string>& seenPaths,
+	std::size_t& foundInRoot) {
 	std::error_code ec;
 
 	for (const auto& entry : fs::recursive_directory_iterator(root, ec)) {
@@ -124,21 +133,18 @@ void collectMediaFiles(const fs::path& root, std::vector<MediaClip>& clips, std:
 			continue;
 		}
 
-		const std::string absPath = formatPathForLog(fs::absolute(filePath));
-		const bool alreadyFound = std::any_of(clips.begin(), clips.end(),
-			[&](const MediaClip& existing) {
-				return pathsEquivalent(existing.absolutePath, absPath);
-			});
-
-		if (!alreadyFound) {
-			MediaClip clip;
-			clip.absolutePath = absPath;
-			clip.displayName = filePath.filename().string();
-			clip.mediaType = mediaTypeForPath(filePath);
-			clips.push_back(std::move(clip));
-			++foundInRoot;
-			ofLogVerbose("MediaClipLibrary") << "  found " << filePath.filename().string();
+		const std::string dedupKey = pathDedupKey(filePath);
+		if (!seenPaths.insert(dedupKey).second) {
+			continue;
 		}
+
+		MediaClip clip;
+		clip.absolutePath = formatPathForLog(fs::absolute(filePath));
+		clip.displayName = filePath.filename().string();
+		clip.mediaType = mediaTypeForPath(filePath);
+		clips.push_back(std::move(clip));
+		++foundInRoot;
+		ofLogVerbose("MediaClipLibrary") << "  found " << filePath.filename().string();
 	}
 }
 
@@ -181,9 +187,12 @@ void MediaClipLibrary::scan() {
 		return;
 	}
 
+	std::unordered_set<std::string> seenPaths;
+	seenPaths.reserve(1024);
+
 	for (const auto& root : roots) {
 		std::size_t foundInRoot = 0;
-		collectMediaFiles(root, clips, foundInRoot);
+		collectMediaFiles(root, clips, seenPaths, foundInRoot);
 
 		searchLog += (searchLog.empty() ? "" : " | ")
 			+ formatPathForLog(root) + " (" + ofToString(foundInRoot) + ")";

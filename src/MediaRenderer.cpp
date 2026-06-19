@@ -53,26 +53,61 @@ WidthFitLayout widthFitLayout(float mediaW, float mediaH, const ofRectangle& bou
 	return layout;
 }
 
-WidthFitLayout coverFitLayout(float mediaW, float mediaH, const ofRectangle& bounds) {
-	WidthFitLayout layout;
-
-	if (mediaW <= 0.0f || mediaH <= 0.0f || bounds.width <= 0.0f || bounds.height <= 0.0f) {
-		layout.dest = bounds;
-		layout.srcW = mediaW;
-		layout.srcH = mediaH;
-		return layout;
+ofRectangle mapImageRectToScreen(
+	const ofRectangle& dest,
+	float cropSrcX,
+	float cropSrcY,
+	float cropSrcW,
+	float cropSrcH,
+	float rectX,
+	float rectY,
+	float rectW,
+	float rectH) {
+	if (cropSrcW <= 0.0f || cropSrcH <= 0.0f || rectW <= 0.0f || rectH <= 0.0f) {
+		return {};
 	}
 
-	const float scale = std::max(bounds.width / mediaW, bounds.height / mediaH);
-	layout.dest.width = mediaW * scale;
-	layout.dest.height = mediaH * scale;
-	layout.dest.x = bounds.x + (bounds.width - layout.dest.width) * 0.5f;
-	layout.dest.y = bounds.y + (bounds.height - layout.dest.height) * 0.5f;
-	layout.srcX = 0.0f;
-	layout.srcY = 0.0f;
-	layout.srcW = mediaW;
-	layout.srcH = mediaH;
-	return layout;
+	const float scaleX = dest.width / cropSrcW;
+	const float scaleY = dest.height / cropSrcH;
+	return {
+		dest.x + (rectX - cropSrcX) * scaleX,
+		dest.y + (rectY - cropSrcY) * scaleY,
+		rectW * scaleX,
+		rectH * scaleY
+	};
+}
+
+void drawDebugRegionOutline(
+	const ofRectangle& screenRect) {
+	if (screenRect.width <= 0.0f || screenRect.height <= 0.0f) {
+		return;
+	}
+
+	ofPushStyle();
+	ofSetColor(0, 255, 0);
+	ofSetLineWidth(6.0f);
+	ofNoFill();
+	ofDrawRectangle(screenRect);
+	ofPopStyle();
+}
+
+void drawDebugRegionForLayout(
+	const ImageDrawHints& hints,
+	const ofRectangle& dest,
+	float cropSrcX,
+	float cropSrcY,
+	float cropSrcW,
+	float cropSrcH) {
+	if (!hints.has_debug_region) {
+		return;
+	}
+
+	const ofRectangle screenRect = mapImageRectToScreen(
+		dest,
+		cropSrcX, cropSrcY, cropSrcW, cropSrcH,
+		hints.debug_region_x, hints.debug_region_y,
+		hints.debug_region_w, hints.debug_region_h);
+	drawDebugRegionOutline(screenRect);
 }
 
 void drawWidthFitMedia(const ofRectangle& bounds, float mediaW, float mediaH,
@@ -113,8 +148,10 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 		return;
 	}
 
-	float mediaW = static_cast<float>(image.getWidth());
-	float mediaH = static_cast<float>(image.getHeight());
+	const float fullW = static_cast<float>(image.getWidth());
+	const float fullH = static_cast<float>(image.getHeight());
+	float mediaW = fullW;
+	float mediaH = fullH;
 	float srcX = 0.0f;
 	float srcY = 0.0f;
 	float srcW = mediaW;
@@ -134,11 +171,26 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 	ofDrawRectangle(bounds);
 	ofSetColor(255);
 
-	const WidthFitLayout layout = (use_focus && hints->cover_fit)
-		? coverFitLayout(mediaW, mediaH, bounds)
-		: widthFitLayout(mediaW, mediaH, bounds);
+	if (use_focus && hints->cover_fit) {
+		image.drawSubsection(
+			bounds.x, bounds.y, bounds.width, bounds.height,
+			srcX, srcY, srcW, srcH);
 
+		if (hints) {
+			drawDebugRegionForLayout(*hints, bounds, srcX, srcY, srcW, srcH);
+		}
+		return;
+	}
+
+	const WidthFitLayout layout = widthFitLayout(mediaW, mediaH, bounds);
 	image.drawSubsection(
 		layout.dest.x, layout.dest.y, layout.dest.width, layout.dest.height,
 		srcX + layout.srcX, srcY + layout.srcY, layout.srcW, layout.srcH);
+
+	if (hints) {
+		drawDebugRegionForLayout(
+			*hints,
+			layout.dest,
+			srcX + layout.srcX, srcY + layout.srcY, layout.srcW, layout.srcH);
+	}
 }

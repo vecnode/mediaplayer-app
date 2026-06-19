@@ -4,23 +4,40 @@
 #include "ofMain.h"
 #include <string>
 
-/// Loads PDF_TEXT.md + OBJS_TEXT.md from the media-player data folder.
+/// Loads PDF_TEXT.md + OBJS_TEXT.md from the media-player data folder (lazy).
 class MediaCorpusProvider {
 public:
-	void setup(const std::string& dataDirectory);
+	void setDataDirectory(const std::string& dataDirectory);
 
-	bool isLoaded() const { return loaded_; }
-	std::size_t entryCount() const { return corpus_.size(); }
+	bool isLoaded() const;
+	std::size_t entryCount() const;
 
 	const metaagent::media::ImageCorpusEntry* findForClip(const std::string& clipPath) const;
 	std::string subtitlePreview(const std::string& clipPath) const;
 	std::string subtitleFull(const std::string& clipPath) const;
-	bool focusRectForClip(
+
+	/// Index of a random detected region for the clip (valid bbox only).
+	std::size_t pickRandomRegionIndex(const std::string& clipPath) const;
+
+	bool focusRectForRegion(
 		const std::string& clipPath,
-		std::size_t clipIndex,
+		std::size_t regionIndex,
+		float viewportAspectWidthOverHeight,
 		metaagent::media::IntRect& outRect) const;
 
+	bool regionBboxForClip(
+		const std::string& clipPath,
+		std::size_t regionIndex,
+		metaagent::media::IntRect& outBbox) const;
+
+	std::size_t regionCountForClip(const std::string& clipPath) const;
+	std::size_t entriesWithRegionsCount() const;
+
 private:
-	metaagent::media::MediaCorpus corpus_;
-	bool loaded_ = false;
+	void ensureLoaded() const;
+
+	mutable metaagent::media::MediaCorpus corpus_;
+	mutable bool loaded_ = false;
+	mutable bool loadAttempted_ = false;
+	std::string dataDirectory_;
 };

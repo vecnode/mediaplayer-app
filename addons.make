@@ -1,4 +1,2 @@
 ofxGui
 ofxNetwork
-ofxOllama
-ofxOsc

@@ -154,7 +154,7 @@ void MediaPlaybackEngine::beginAsyncLoadIntoSlot(int slotIndex, std::size_t clip
 
 	const MediaClip& clip = clipSource->clipAt(clipIndex);
 	if (clip.mediaType == ClipMediaType::Image) {
-		loadClipIntoSlotSync(slotIndex, clipIndex, false);
+		// Images are large — load only when the user switches clips.
 		return;
 	}
 
@@ -223,6 +223,10 @@ void MediaPlaybackEngine::schedulePrefetch() {
 	}
 
 	const std::size_t nextIndex = clipSource->nextIndex(currentClipIndex);
+
+	if (clipSource->clipAt(nextIndex).mediaType == ClipMediaType::Image) {
+		return;
+	}
 
 	if (isStandbyReadyFor(nextIndex)) {
 		return;

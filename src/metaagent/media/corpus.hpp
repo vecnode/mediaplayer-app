@@ -42,6 +42,7 @@ public:
 
 	METAAGENT_API bool empty() const { return entries_.empty(); }
 	METAAGENT_API std::size_t size() const { return entries_.size(); }
+	METAAGENT_API std::size_t countEntriesWithRegions() const;
 
 	METAAGENT_API const ImageCorpusEntry* find_by_file_key(const core::String& file_key) const;
 	METAAGENT_API const ImageCorpusEntry* find_by_path(const core::String& absolute_or_display_path) const;
@@ -64,6 +65,14 @@ public:
 	METAAGENT_API std::size_t pick_focus_region_index(
 		const ImageCorpusEntry& entry,
 		std::size_t seed = 0) const;
+
+	/// Viewport-aspect crop centered on a detected region (pixel coords, uniform scale).
+	METAAGENT_API bool region_focus_crop_for_aspect(
+		const ImageCorpusEntry& entry,
+		std::size_t region_index,
+		float target_aspect_width_over_height,
+		IntRect& out_rect,
+		float padding_fraction = 0.12f) const;
 
 	/// 16:9 crop centered on a single text region (pixel coords).
 	METAAGENT_API bool region_focus_crop_16x9(

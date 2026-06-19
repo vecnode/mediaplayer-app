@@ -7,6 +7,7 @@
 #include "MediaRenderer.h"
 #include "ofMain.h"
 #include <functional>
+#include <limits>
 #include <string>
 
 /// Composes playlist source + playback engine (stable facade for ofApp / controller).
@@ -45,7 +46,7 @@ public:
 
 private:
 	void syncLoadedPath();
-	void refreshImageDrawHints();
+	void refreshImageDrawHints(const ofRectangle& bounds);
 	void onClipSwitched(const MediaPlaybackEngine::SwitchResult& result);
 
 	ClipChangedHandler clipChangedHandler;
@@ -55,4 +56,6 @@ private:
 	MediaPlaybackEngine engine;
 	ImageDrawHints imageDrawHints_;
 	std::string loadedPath;
+	mutable ofRectangle lastDrawBounds_;
+	std::size_t selectedRegionIndex_ = std::numeric_limits<std::size_t>::max();
 };

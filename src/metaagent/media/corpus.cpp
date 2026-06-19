@@ -312,6 +312,48 @@ void parse_text_regions(const core::String& json, ImageCorpusEntry& entry)
 	}
 }
 
+void parse_objects(const core::String& json, ImageCorpusEntry& entry)
+{
+	const size_t objects_index = json.find("\"objects\"");
+	if (objects_index == core::String::npos)
+	{
+		return;
+	}
+
+	size_t cursor = objects_index;
+	while (true)
+	{
+		const size_t label_index = json.find("\"label\"", cursor + 1);
+		if (label_index == core::String::npos)
+		{
+			break;
+		}
+
+		const size_t region_start = json.rfind('{', label_index);
+		if (region_start == core::String::npos || region_start < cursor)
+		{
+			break;
+		}
+
+		TextRegion region;
+		extract_json_int_field(json, "id", region.id, region_start);
+		region.text = extract_json_string_field_local(json, "label", region_start);
+		extract_json_float_field(json, "confidence", region.confidence, region_start);
+		if (!parse_bbox(json, region_start, region.bbox))
+		{
+			cursor = label_index + 7;
+			continue;
+		}
+
+		if (region.bbox.width > 0 && region.bbox.height > 0)
+		{
+			entry.text_regions.push_back(std::move(region));
+		}
+
+		cursor = label_index + 7;
+	}
+}
+
 void parse_objs_sections(const core::String& markdown, core::Array<ImageCorpusEntry>& entries)
 {
 	size_t cursor = 0;
@@ -336,6 +378,7 @@ void parse_objs_sections(const core::String& markdown, core::Array<ImageCorpusEn
 			{
 				ImageCorpusEntry* entry = find_or_create_entry(entries, file_key);
 				parse_text_regions(json_block, *entry);
+				parse_objects(json_block, *entry);
 
 				const size_t image_index = json_block.find("\"image\"");
 				if (image_index != core::String::npos)
@@ -398,6 +441,23 @@ bool MediaCorpus::load_pair(const core::String& pdf_text_md_path, const core::St
 		});
 
 	return !entries_.empty();
+}
+
+std::size_t MediaCorpus::countEntriesWithRegions() const
+{
+	std::size_t count = 0;
+	for (const ImageCorpusEntry& entry : entries_)
+	{
+		for (const TextRegion& region : entry.text_regions)
+		{
+			if (region.bbox.width > 0 && region.bbox.height > 0)
+			{
+				++count;
+				break;
+			}
+		}
+	}
+	return count;
 }
 
 bool MediaCorpus::load_from_directory(const core::String& data_directory)
@@ -591,18 +651,24 @@ std::size_t MediaCorpus::pick_focus_region_index(
 	return candidates[seed % candidates.size()];
 }
 
-bool MediaCorpus::region_focus_crop_16x9(
+bool MediaCorpus::region_focus_crop_for_aspect(
 	const ImageCorpusEntry& entry,
 	const std::size_t region_index,
+	const float target_aspect,
 	IntRect& out_rect,
 	const float padding_fraction) const
 {
-	if (region_index >= entry.text_regions.size())
+	if (region_index >= entry.text_regions.size() || target_aspect <= 0.0f)
 	{
 		return false;
 	}
 
 	const TextRegion& region = entry.text_regions[region_index];
+	if (region.bbox.width <= 0 || region.bbox.height <= 0)
+	{
+		return false;
+	}
+
 	const int32_t image_w = entry.image_width > 0
 		? entry.image_width
 		: region.bbox.x + region.bbox.width;
@@ -628,7 +694,7 @@ bool MediaCorpus::region_focus_crop_16x9(
 
 	const int32_t box_w = std::max(1, x1 - x0);
 	const int32_t box_h = std::max(1, y1 - y0);
-	constexpr float k_aspect = 16.0f / 9.0f;
+	const float k_aspect = target_aspect;
 
 	int32_t crop_w = 0;
 	int32_t crop_h = 0;
@@ -690,6 +756,15 @@ bool MediaCorpus::region_focus_crop_16x9(
 	out_rect.width = crop_w;
 	out_rect.height = crop_h;
 	return out_rect.width > 0 && out_rect.height > 0;
+}
+
+bool MediaCorpus::region_focus_crop_16x9(
+	const ImageCorpusEntry& entry,
+	const std::size_t region_index,
+	IntRect& out_rect,
+	const float padding_fraction) const
+{
+	return region_focus_crop_for_aspect(entry, region_index, 16.0f / 9.0f, out_rect, padding_fraction);
 }
 
 bool MediaCorpus::build_region_mask(

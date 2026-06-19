@@ -11,12 +11,6 @@
 		},
 		{
 			"path": "${workspaceRoot}/../..\\..\\..\\addons\\ofxNetwork"
-		},
-		{
-			"path": "${workspaceRoot}/../..\\..\\..\\addons\\ofxOllama"
-		},
-		{
-			"path": "${workspaceRoot}/../..\\..\\..\\addons\\ofxOsc"
 		}
 	],
 	"openFrameworksProjectGeneratorVersion": "0.103.0",
