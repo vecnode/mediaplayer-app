@@ -41,20 +41,16 @@ void ofApp::setup() {
 	controller.setup(&mediaPanel, &subtitles);
 	httpServer.setup(HttpControlServer::kDefaultPort, &controller);
 
-	playButton.addListener(this, &ofApp::onPlayPressed);
 	cycleButton.addListener(this, &ofApp::onCyclePressed);
 	randomButton.addListener(this, &ofApp::onRandomPressed);
-	stopButton.addListener(this, &ofApp::onStopPressed);
 	subtitlesToggle.addListener(this, &ofApp::onSubtitlesToggled);
 	regionBBoxToggle.addListener(this, &ofApp::onRegionBBoxToggled);
 	regionFocusToggle.addListener(this, &ofApp::onRegionFocusToggled);
 	regionPanToggle.addListener(this, &ofApp::onRegionPanToggled);
 
 	gui.setup("Controls");
-	gui.add(playButton.setup("Play"));
 	gui.add(cycleButton.setup("Next"));
 	gui.add(randomButton.setup("Random"));
-	gui.add(stopButton.setup("Stop"));
 	gui.add(subtitlesToggle.setup("Subtitles", true));
 	gui.add(regionBBoxToggle.setup("Region bbox", true));
 	gui.add(regionFocusToggle.setup("Region zoom", true));
@@ -67,19 +63,12 @@ void ofApp::setup() {
 void ofApp::exit() {
 	httpServer.shutdown();
 
-	playButton.removeListener(this, &ofApp::onPlayPressed);
 	cycleButton.removeListener(this, &ofApp::onCyclePressed);
 	randomButton.removeListener(this, &ofApp::onRandomPressed);
-	stopButton.removeListener(this, &ofApp::onStopPressed);
 	subtitlesToggle.removeListener(this, &ofApp::onSubtitlesToggled);
 	regionBBoxToggle.removeListener(this, &ofApp::onRegionBBoxToggled);
 	regionFocusToggle.removeListener(this, &ofApp::onRegionFocusToggled);
 	regionPanToggle.removeListener(this, &ofApp::onRegionPanToggled);
-}
-
-void ofApp::onPlayPressed() {
-	controller.play();
-	refreshGuiFromController();
 }
 
 void ofApp::onCyclePressed() {
@@ -89,11 +78,6 @@ void ofApp::onCyclePressed() {
 
 void ofApp::onRandomPressed() {
 	controller.randomClip();
-	refreshGuiFromController();
-}
-
-void ofApp::onStopPressed() {
-	controller.stop();
 	refreshGuiFromController();
 }
 

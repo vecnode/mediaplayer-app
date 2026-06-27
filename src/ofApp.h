@@ -22,10 +22,8 @@ public:
 private:
 	static ofRectangle mediaBoundsForWindow(int w, int h);
 
-	void onPlayPressed();
 	void onCyclePressed();
 	void onRandomPressed();
-	void onStopPressed();
 	void onSubtitlesToggled(bool& value);
 	void onRegionBBoxToggled(bool& value);
 	void onRegionFocusToggled(bool& value);
@@ -40,10 +38,8 @@ private:
 	ofRectangle panelBounds;
 
 	ofxPanel gui;
-	ofxButton playButton;
 	ofxButton cycleButton;
 	ofxButton randomButton;
-	ofxButton stopButton;
 	ofxToggle subtitlesToggle;
 	ofxToggle regionBBoxToggle;
 	ofxToggle regionFocusToggle;
