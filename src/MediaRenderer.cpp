@@ -6,6 +6,7 @@
 #include "MediaRenderer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 
 namespace {
@@ -162,6 +163,37 @@ void drawWidthFitMedia(const ofRectangle& bounds, float mediaW, float mediaH,
 	drawMedia(layout);
 }
 
+/// Applies the selection animation to a source crop window, keeping it inside
+/// the full image. Drift wanders the window on a slow Lissajous path; slow zoom
+/// eases the window down to ~90% over ~25s (Ken Burns push-in).
+void animateSrcRect(const ImageDrawHints& hints,
+	float fullW, float fullH,
+	float& srcX, float& srcY, float& srcW, float& srcH) {
+	if (hints.anim_mode == kAnimNone || srcW <= 0.0f || srcH <= 0.0f) {
+		return;
+	}
+
+	const float t = ofGetElapsedTimef() - hints.anim_start_seconds;
+
+	if (hints.anim_mode == kAnimDrift) {
+		srcX += 0.03f * srcW * std::sin(t * 0.35f);
+		srcY += 0.03f * srcH * std::cos(t * 0.27f);
+	} else if (hints.anim_mode == kAnimSlowZoom) {
+		const float progress = std::min(t / 25.0f, 1.0f);
+		const float eased = 0.5f - 0.5f * std::cos(progress * static_cast<float>(PI));
+		const float factor = 1.0f - 0.10f * eased;
+		const float centerX = srcX + srcW * 0.5f;
+		const float centerY = srcY + srcH * 0.5f;
+		srcW *= factor;
+		srcH *= factor;
+		srcX = centerX - srcW * 0.5f;
+		srcY = centerY - srcH * 0.5f;
+	}
+
+	srcX = std::max(0.0f, std::min(srcX, fullW - srcW));
+	srcY = std::max(0.0f, std::min(srcY, fullH - srcH));
+}
+
 } // namespace
 
 void MediaRenderer::draw(const ofVideoPlayer& player, const ofRectangle& bounds) {
@@ -214,19 +246,19 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 	ofSetColor(255);
 
 	if (use_focus && hints->cover_fit) {
+		animateSrcRect(*hints, fullW, fullH, srcX, srcY, srcW, srcH);
 		image.drawSubsection(
 			bounds.x, bounds.y, bounds.width, bounds.height,
 			srcX, srcY, srcW, srcH);
 
-		if (hints) {
-			drawDebugRegionForLayout(*hints, bounds, srcX, srcY, srcW, srcH);
-		}
+		drawDebugRegionForLayout(*hints, bounds, srcX, srcY, srcW, srcH);
 		return;
 	}
 
 	if (hints && hints->pan_to_region) {
-		const WidthFitLayout layout = widthFitLayoutOnPoint(
+		WidthFitLayout layout = widthFitLayoutOnPoint(
 			fullW, fullH, bounds, hints->pan_center_x, hints->pan_center_y);
+		animateSrcRect(*hints, fullW, fullH, layout.srcX, layout.srcY, layout.srcW, layout.srcH);
 		image.drawSubsection(
 			layout.dest.x, layout.dest.y, layout.dest.width, layout.dest.height,
 			layout.srcX, layout.srcY, layout.srcW, layout.srcH);
@@ -239,14 +271,21 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 	}
 
 	const WidthFitLayout layout = widthFitLayout(mediaW, mediaH, bounds);
+	float drawSrcX = srcX + layout.srcX;
+	float drawSrcY = srcY + layout.srcY;
+	float drawSrcW = layout.srcW;
+	float drawSrcH = layout.srcH;
+	if (hints) {
+		animateSrcRect(*hints, fullW, fullH, drawSrcX, drawSrcY, drawSrcW, drawSrcH);
+	}
 	image.drawSubsection(
 		layout.dest.x, layout.dest.y, layout.dest.width, layout.dest.height,
-		srcX + layout.srcX, srcY + layout.srcY, layout.srcW, layout.srcH);
+		drawSrcX, drawSrcY, drawSrcW, drawSrcH);
 
 	if (hints) {
 		drawDebugRegionForLayout(
 			*hints,
 			layout.dest,
-			srcX + layout.srcX, srcY + layout.srcY, layout.srcW, layout.srcH);
+			drawSrcX, drawSrcY, drawSrcW, drawSrcH);
 	}
 }

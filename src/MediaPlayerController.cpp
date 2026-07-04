@@ -164,6 +164,18 @@ bool MediaPlayerController::regionPanEnabled() const {
 	return mediaPanel && mediaPanel->regionPanEnabled();
 }
 
+bool MediaPlayerController::setAnimationsEnabled(bool enabled) {
+	if (!mediaPanel) {
+		return false;
+	}
+	mediaPanel->setAnimationsEnabled(enabled);
+	return true;
+}
+
+bool MediaPlayerController::animationsEnabled() const {
+	return mediaPanel && mediaPanel->animationsEnabled();
+}
+
 MediaPlayerStatus MediaPlayerController::getStatus() const {
 	MediaPlayerStatus status;
 

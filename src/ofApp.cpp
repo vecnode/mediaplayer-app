@@ -47,14 +47,16 @@ void ofApp::setup() {
 	regionBBoxToggle.addListener(this, &ofApp::onRegionBBoxToggled);
 	regionFocusToggle.addListener(this, &ofApp::onRegionFocusToggled);
 	regionPanToggle.addListener(this, &ofApp::onRegionPanToggled);
+	animateToggle.addListener(this, &ofApp::onAnimateToggled);
 
 	gui.setup("Controls");
 	gui.add(cycleButton.setup("Next"));
 	gui.add(randomButton.setup("Random"));
 	gui.add(subtitlesToggle.setup("Subtitles", true));
 	gui.add(regionBBoxToggle.setup("Region bbox", true));
-	gui.add(regionFocusToggle.setup("Region zoom", true));
-	gui.add(regionPanToggle.setup("Region pan", false));
+	gui.add(regionFocusToggle.setup("Region zoom", false));
+	gui.add(regionPanToggle.setup("Region pan", true));
+	gui.add(animateToggle.setup("Animate", true));
 	gui.add(statusLabel.setup("clip", ""));
 
 	refreshGuiFromController();
@@ -69,6 +71,7 @@ void ofApp::exit() {
 	regionBBoxToggle.removeListener(this, &ofApp::onRegionBBoxToggled);
 	regionFocusToggle.removeListener(this, &ofApp::onRegionFocusToggled);
 	regionPanToggle.removeListener(this, &ofApp::onRegionPanToggled);
+	animateToggle.removeListener(this, &ofApp::onAnimateToggled);
 }
 
 void ofApp::onCyclePressed() {
@@ -100,11 +103,16 @@ void ofApp::onRegionPanToggled(bool& value) {
 	regionFocusToggle = controller.regionFocusEnabled();
 }
 
+void ofApp::onAnimateToggled(bool& value) {
+	controller.setAnimationsEnabled(value);
+}
+
 void ofApp::refreshGuiFromController() {
 	subtitlesToggle = controller.isSubtitlesEnabled();
 	regionBBoxToggle = controller.showRegionBBox();
 	regionFocusToggle = controller.regionFocusEnabled();
 	regionPanToggle = controller.regionPanEnabled();
+	animateToggle = controller.animationsEnabled();
 
 	const MediaPlayerStatus status = controller.getStatus();
 

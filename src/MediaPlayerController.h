@@ -50,6 +50,8 @@ public:
 	bool regionFocusEnabled() const;
 	bool setRegionPanEnabled(bool enabled);
 	bool regionPanEnabled() const;
+	bool setAnimationsEnabled(bool enabled);
+	bool animationsEnabled() const;
 
 	MediaPlayerStatus getStatus() const;
 	std::string getSubtitleText() const;
