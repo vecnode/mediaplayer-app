@@ -48,6 +48,8 @@ public:
 	bool regionFocusEnabled() const { return regionFocusEnabled_; }
 	void setRegionPanEnabled(bool enabled);
 	bool regionPanEnabled() const { return regionPanEnabled_; }
+	void setAnimationsEnabled(bool enabled);
+	bool animationsEnabled() const { return animationsEnabled_; }
 
 	using ClipChangedHandler = std::function<void()>;
 	void setClipChangedHandler(ClipChangedHandler handler);
@@ -56,6 +58,7 @@ private:
 	void syncLoadedPath();
 	void refreshImageDrawHints(const ofRectangle& bounds);
 	void onClipSwitched(const MediaPlaybackEngine::SwitchResult& result);
+	void pickAnimationForSelection();
 
 	ClipChangedHandler clipChangedHandler;
 
@@ -67,6 +70,11 @@ private:
 	mutable ofRectangle lastDrawBounds_;
 	std::size_t selectedRegionIndex_ = std::numeric_limits<std::size_t>::max();
 	bool showRegionBBox_ = true;
-	bool regionFocusEnabled_ = true;
-	bool regionPanEnabled_ = false;
+	// Region pan is the default display mode; zoom is the opt-in alternative.
+	bool regionFocusEnabled_ = false;
+	bool regionPanEnabled_ = true;
+	// Selection animation: mode picked at random per clip (see ImageDrawHints).
+	bool animationsEnabled_ = true;
+	int selectedAnimMode_ = 0;
+	float animStartSeconds_ = 0.0f;
 };

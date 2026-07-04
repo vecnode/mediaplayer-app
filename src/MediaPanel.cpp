@@ -5,6 +5,7 @@
 
 #include "MediaPanel.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace {
@@ -67,6 +68,9 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 		}
 	}
 
+	imageDrawHints_.anim_mode = animationsEnabled_ ? selectedAnimMode_ : kAnimNone;
+	imageDrawHints_.anim_start_seconds = animStartSeconds_;
+
 	const float viewportAspect = bounds.width / bounds.height;
 	metaagent::media::IntRect focus {};
 	if (regionPanEnabled_ && hasRegion) {
@@ -91,6 +95,13 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 	engine.setImageDrawHints(&imageDrawHints_);
 }
 
+void MediaPanel::pickAnimationForSelection() {
+	// Random per selection: none, drift, or slow zoom.
+	selectedAnimMode_ = static_cast<int>(ofRandom(static_cast<float>(kAnimModeCount)));
+	selectedAnimMode_ = std::max(0, std::min(selectedAnimMode_, kAnimModeCount - 1));
+	animStartSeconds_ = ofGetElapsedTimef();
+}
+
 void MediaPanel::onClipSwitched(const MediaPlaybackEngine::SwitchResult& result) {
 	if (!result.success) {
 		return;
@@ -98,6 +109,7 @@ void MediaPanel::onClipSwitched(const MediaPlaybackEngine::SwitchResult& result)
 
 	syncLoadedPath();
 	selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
+	pickAnimationForSelection();
 	refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 
 	if (clipChangedHandler) {
@@ -132,6 +144,7 @@ void MediaPanel::setup() {
 
 	syncLoadedPath();
 	selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
+	pickAnimationForSelection();
 	refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 }
 
@@ -160,6 +173,7 @@ bool MediaPanel::openClipAtIndex(std::size_t index, bool primePreviewFrame) {
 	if (opened) {
 		syncLoadedPath();
 		selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
+		pickAnimationForSelection();
 		refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 	}
 	return opened;
@@ -209,6 +223,17 @@ void MediaPanel::setRegionPanEnabled(bool enabled) {
 	if (enabled) {
 		regionFocusEnabled_ = false;
 	}
+	if (lastDrawBounds_.width > 0.0f) {
+		refreshImageDrawHints(lastDrawBounds_);
+	}
+}
+
+void MediaPanel::setAnimationsEnabled(bool enabled) {
+	if (animationsEnabled_ == enabled) {
+		return;
+	}
+	animationsEnabled_ = enabled;
+	animStartSeconds_ = ofGetElapsedTimef();
 	if (lastDrawBounds_.width > 0.0f) {
 		refreshImageDrawHints(lastDrawBounds_);
 	}

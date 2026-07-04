@@ -22,6 +22,18 @@ struct ImageDrawHints {
 	bool pan_to_region = false;
 	float pan_center_x = 0.0f;
 	float pan_center_y = 0.0f;
+
+	/// Selection animation, chosen per clip: 0 = none, 1 = drift (the visible
+	/// window slowly wanders), 2 = slow zoom (Ken Burns push-in).
+	int anim_mode = 0;
+	float anim_start_seconds = 0.0f;
+};
+
+enum SelectionAnimMode {
+	kAnimNone = 0,
+	kAnimDrift = 1,
+	kAnimSlowZoom = 2,
+	kAnimModeCount = 3
 };
 
 /// Draws media width-fit, vertically centered; tall content (e.g. A4) is center-cropped.

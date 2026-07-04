@@ -28,6 +28,7 @@ private:
 	void onRegionBBoxToggled(bool& value);
 	void onRegionFocusToggled(bool& value);
 	void onRegionPanToggled(bool& value);
+	void onAnimateToggled(bool& value);
 	void refreshGuiFromController();
 
 	MediaPlayerController controller;
@@ -44,6 +45,7 @@ private:
 	ofxToggle regionBBoxToggle;
 	ofxToggle regionFocusToggle;
 	ofxToggle regionPanToggle;
+	ofxToggle animateToggle;
 	ofxLabel statusLabel;
 	bool guiVisible_ = true;
 };
