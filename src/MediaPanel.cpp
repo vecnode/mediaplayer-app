@@ -56,7 +56,10 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 		imageDrawHints_.debug_region_y = static_cast<float>(regionBbox.y);
 		imageDrawHints_.debug_region_w = static_cast<float>(regionBbox.width);
 		imageDrawHints_.debug_region_h = static_cast<float>(regionBbox.height);
-	} else {
+	} else if (showRegionBBox_ && !hasRegion) {
+		// Only worth diagnosing when the debug box is actually meant to be shown
+		// and still couldn't find a region to draw — not just because the toggle
+		// is off, which alone hits this branch on every clip regardless of data.
 		const std::size_t regionCount = corpus_.regionCountForClip(loadedPath);
 		if (regionCount == 0 && corpus_.findForClip(loadedPath) != nullptr) {
 			ofLogWarning("MediaPanel") << "No OBJS regions for \"" << loadedPath
