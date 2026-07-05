@@ -73,8 +73,18 @@ private:
 	// Region pan is the default display mode; zoom is the opt-in alternative.
 	bool regionFocusEnabled_ = false;
 	bool regionPanEnabled_ = true;
-	// Selection animation: mode picked at random per clip (see ImageDrawHints).
+	// Selection animation: mode + motion parameters randomized per clip (see
+	// ImageDrawHints and pickAnimationForSelection()).
 	bool animationsEnabled_ = true;
 	int selectedAnimMode_ = 0;
 	float animStartSeconds_ = 0.0f;
+	float animAmpX_ = 0.05f;
+	float animAmpY_ = 0.05f;
+	float animFreqX_ = 0.30f;
+	float animFreqY_ = 0.22f;
+	float animPhaseX_ = 0.0f;
+	float animPhaseY_ = 0.0f;
+	float animZoomAmp_ = 0.0f;
+	float animZoomFreq_ = 0.08f;
+	float animZoomPhase_ = 0.0f;
 };

@@ -7,20 +7,10 @@
 #include "PlatformVideo.h"
 
 ofRectangle ofApp::mediaBoundsForWindow(int w, int h) {
-	constexpr float kMediaScale = 0.6f;
-	constexpr float kAspect = 16.0f / 9.0f;
-
-	const float maxW = w * kMediaScale;
-	const float maxH = h * kMediaScale;
-
-	float mediaW = maxW;
-	float mediaH = mediaW / kAspect;
-	if (mediaH > maxH) {
-		mediaH = maxH;
-		mediaW = mediaH * kAspect;
-	}
-
-	return ofRectangle((w - mediaW) * 0.5f, (h - mediaH) * 0.5f, mediaW, mediaH);
+	// Media fills the entire window/display - no scale-down, no centering.
+	// The window itself is fixed 1080p (16:9), so this stays 16:9 whether
+	// windowed or fullscreen (F11).
+	return ofRectangle(0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h));
 }
 
 void ofApp::setup() {
@@ -154,6 +144,11 @@ void ofApp::draw() {
 void ofApp::keyPressed(int key) {
 	if (key == 'g' || key == 'G') {
 		guiVisible_ = !guiVisible_;
+	}
+	if (key == OF_KEY_F11) {
+		// The window isn't drag-resizable (see main.cpp); this is the
+		// "maximize" action instead - toggles true OS fullscreen.
+		ofToggleFullscreen();
 	}
 }
 
