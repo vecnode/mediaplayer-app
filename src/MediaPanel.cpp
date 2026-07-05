@@ -96,9 +96,13 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 }
 
 void MediaPanel::pickAnimationForSelection() {
-	// Random per selection: none, drift, or slow zoom.
-	selectedAnimMode_ = static_cast<int>(ofRandom(static_cast<float>(kAnimModeCount)));
-	selectedAnimMode_ = std::max(0, std::min(selectedAnimMode_, kAnimModeCount - 1));
+	// Always animate - panning must never stop while a clip is on screen.
+	// Randomly choose between the pan-only and pan+zoom styles; kAnimNone is
+	// deliberately excluded here (it's only reachable via the master
+	// "Animate" toggle, which forces kAnimNone for every clip when off).
+	constexpr int kAnimatedModeCount = kAnimModeCount - 1;
+	selectedAnimMode_ = kAnimDrift + static_cast<int>(ofRandom(static_cast<float>(kAnimatedModeCount)));
+	selectedAnimMode_ = std::max(static_cast<int>(kAnimDrift), std::min(selectedAnimMode_, kAnimModeCount - 1));
 	animStartSeconds_ = ofGetElapsedTimef();
 }
 

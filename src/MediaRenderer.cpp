@@ -164,8 +164,11 @@ void drawWidthFitMedia(const ofRectangle& bounds, float mediaW, float mediaH,
 }
 
 /// Applies the selection animation to a source crop window, keeping it inside
-/// the full image. Drift wanders the window on a slow Lissajous path; slow zoom
-/// eases the window down to ~90% over ~25s (Ken Burns push-in).
+/// the full image. Both modes pan continuously on both axes and never settle -
+/// there is no "resting" state once animation starts. Drift wanders the window
+/// on a slow Lissajous path (no zoom); slow zoom does the same continuous pan
+/// plus a never-settling breathing zoom (a Ken Burns effect that keeps moving
+/// indefinitely instead of easing to a fixed end state).
 void animateSrcRect(const ImageDrawHints& hints,
 	float fullW, float fullH,
 	float& srcX, float& srcY, float& srcW, float& srcH) {
@@ -179,11 +182,12 @@ void animateSrcRect(const ImageDrawHints& hints,
 		srcX += 0.03f * srcW * std::sin(t * 0.35f);
 		srcY += 0.03f * srcH * std::cos(t * 0.27f);
 	} else if (hints.anim_mode == kAnimSlowZoom) {
-		const float progress = std::min(t / 25.0f, 1.0f);
-		const float eased = 0.5f - 0.5f * std::cos(progress * static_cast<float>(PI));
-		const float factor = 1.0f - 0.10f * eased;
-		const float centerX = srcX + srcW * 0.5f;
-		const float centerY = srcY + srcH * 0.5f;
+		// Zoom oscillates between 90% and 100% forever (~78s period) instead
+		// of easing to a fixed 90% and stopping - it never stops moving.
+		const float zoomWave = 0.5f + 0.5f * std::sin(t * 0.08f);
+		const float factor = 1.0f - 0.10f * zoomWave;
+		const float centerX = srcX + srcW * 0.5f + 0.04f * srcW * std::sin(t * 0.22f);
+		const float centerY = srcY + srcH * 0.5f + 0.04f * srcH * std::cos(t * 0.17f);
 		srcW *= factor;
 		srcH *= factor;
 		srcX = centerX - srcW * 0.5f;
