@@ -23,10 +23,24 @@ struct ImageDrawHints {
 	float pan_center_x = 0.0f;
 	float pan_center_y = 0.0f;
 
-	/// Selection animation, chosen per clip: 0 = none, 1 = drift (the visible
-	/// window slowly wanders), 2 = slow zoom (Ken Burns push-in).
+	/// Selection animation, chosen per clip: 0 = none, 1 = drift (pan only),
+	/// 2 = slow zoom (pan + breathing zoom). Never settles once started - both
+	/// modes keep moving on both axes for as long as the clip is shown.
+	/// Amplitude/frequency/phase are randomized per clip (see
+	/// MediaPanel::pickAnimationForSelection) so consecutive clips read as
+	/// visually distinct: some pan mostly vertically ("go down, go up"), some
+	/// mostly horizontally, some as a diagonal/mixed drift.
 	int anim_mode = 0;
 	float anim_start_seconds = 0.0f;
+	float anim_amp_x = 0.05f;
+	float anim_amp_y = 0.05f;
+	float anim_freq_x = 0.30f;
+	float anim_freq_y = 0.22f;
+	float anim_phase_x = 0.0f;
+	float anim_phase_y = 0.0f;
+	float anim_zoom_amp = 0.0f;
+	float anim_zoom_freq = 0.08f;
+	float anim_zoom_phase = 0.0f;
 };
 
 enum SelectionAnimMode {

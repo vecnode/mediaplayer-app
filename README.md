@@ -17,9 +17,15 @@ Images are listed before videos. **Next** / **Previous** cycle the playlist. **P
 
 ### Image display
 
-When `OBJS_TEXT.md` has regions for an image, each clip shows **one detected area**, chosen **at random** on every switch. The view is centered in the media panel, scaled uniformly (no stretching), with black letterboxing as needed.
+When `OBJS_TEXT.md` has regions for an image, each clip shows **one detected area**, chosen **at random** on every switch. The view fills the window, scaled uniformly (no stretching), with black letterboxing as needed.
 
 Without corpus data, images use width-fit framing.
+
+While a clip is on screen it **never sits still**: the visible crop continuously pans on both axes (some clips read as mostly vertical, some mostly horizontal, some a diagonal mix — randomized per clip so consecutive clips look distinct), and about half the time also breathes in and out with a slow, never-ending zoom. Toggle the **Animate** control to turn this off entirely.
+
+### Window
+
+The window is fixed at **1920×1080** and is **not** drag-resizable. Press **F11** to toggle fullscreen (the "maximize" action for this window). The media view always fills the entire window/screen — no padding or centering.
 
 ## Build
 

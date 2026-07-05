@@ -70,6 +70,15 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 
 	imageDrawHints_.anim_mode = animationsEnabled_ ? selectedAnimMode_ : kAnimNone;
 	imageDrawHints_.anim_start_seconds = animStartSeconds_;
+	imageDrawHints_.anim_amp_x = animAmpX_;
+	imageDrawHints_.anim_amp_y = animAmpY_;
+	imageDrawHints_.anim_freq_x = animFreqX_;
+	imageDrawHints_.anim_freq_y = animFreqY_;
+	imageDrawHints_.anim_phase_x = animPhaseX_;
+	imageDrawHints_.anim_phase_y = animPhaseY_;
+	imageDrawHints_.anim_zoom_amp = animZoomAmp_;
+	imageDrawHints_.anim_zoom_freq = animZoomFreq_;
+	imageDrawHints_.anim_zoom_phase = animZoomPhase_;
 
 	const float viewportAspect = bounds.width / bounds.height;
 	metaagent::media::IntRect focus {};
@@ -104,6 +113,36 @@ void MediaPanel::pickAnimationForSelection() {
 	selectedAnimMode_ = kAnimDrift + static_cast<int>(ofRandom(static_cast<float>(kAnimatedModeCount)));
 	selectedAnimMode_ = std::max(static_cast<int>(kAnimDrift), std::min(selectedAnimMode_, kAnimModeCount - 1));
 	animStartSeconds_ = ofGetElapsedTimef();
+
+	// Randomize the motion character per clip so consecutive clips feel
+	// visually distinct instead of repeating the exact same wobble: some
+	// clips read as mostly vertical ("go down, go up"), some mostly
+	// horizontal, some a diagonal mix of both.
+	float ampX = ofRandom(0.05f, 0.10f);
+	float ampY = ofRandom(0.05f, 0.10f);
+	const int character = static_cast<int>(ofRandom(3.0f)); // 0 vertical, 1 horizontal, 2 mixed
+	if (character == 0) {
+		ampX *= 0.2f;
+		ampY *= 1.5f;
+	} else if (character == 1) {
+		ampX *= 1.5f;
+		ampY *= 0.2f;
+	}
+
+	animAmpX_ = ampX;
+	animAmpY_ = ampY;
+	animFreqX_ = ofRandom(0.16f, 0.36f);
+	animFreqY_ = ofRandom(0.14f, 0.32f);
+	animPhaseX_ = ofRandom(0.0f, TWO_PI);
+	animPhaseY_ = ofRandom(0.0f, TWO_PI);
+
+	if (selectedAnimMode_ == kAnimSlowZoom) {
+		animZoomAmp_ = ofRandom(0.08f, 0.18f);
+		animZoomFreq_ = ofRandom(0.05f, 0.12f);
+		animZoomPhase_ = ofRandom(0.0f, TWO_PI);
+	} else {
+		animZoomAmp_ = 0.0f;
+	}
 }
 
 void MediaPanel::onClipSwitched(const MediaPlaybackEngine::SwitchResult& result) {

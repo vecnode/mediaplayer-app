@@ -164,11 +164,13 @@ void drawWidthFitMedia(const ofRectangle& bounds, float mediaW, float mediaH,
 }
 
 /// Applies the selection animation to a source crop window, keeping it inside
-/// the full image. Both modes pan continuously on both axes and never settle -
-/// there is no "resting" state once animation starts. Drift wanders the window
-/// on a slow Lissajous path (no zoom); slow zoom does the same continuous pan
-/// plus a never-settling breathing zoom (a Ken Burns effect that keeps moving
-/// indefinitely instead of easing to a fixed end state).
+/// the full image. Pan runs on both axes continuously for as long as the clip
+/// is shown - it never settles into a resting state. Amplitude/frequency/phase
+/// come from the hints (randomized per clip in
+/// MediaPanel::pickAnimationForSelection), so one clip might read as mostly
+/// vertical ("go down, go up"), another mostly horizontal, another a diagonal
+/// mix - kAnimSlowZoom layers a never-settling breathing zoom on top of the
+/// same continuous pan.
 void animateSrcRect(const ImageDrawHints& hints,
 	float fullW, float fullH,
 	float& srcX, float& srcY, float& srcW, float& srcH) {
@@ -178,16 +180,15 @@ void animateSrcRect(const ImageDrawHints& hints,
 
 	const float t = ofGetElapsedTimef() - hints.anim_start_seconds;
 
-	if (hints.anim_mode == kAnimDrift) {
-		srcX += 0.03f * srcW * std::sin(t * 0.35f);
-		srcY += 0.03f * srcH * std::cos(t * 0.27f);
-	} else if (hints.anim_mode == kAnimSlowZoom) {
-		// Zoom oscillates between 90% and 100% forever (~78s period) instead
-		// of easing to a fixed 90% and stopping - it never stops moving.
-		const float zoomWave = 0.5f + 0.5f * std::sin(t * 0.08f);
-		const float factor = 1.0f - 0.10f * zoomWave;
-		const float centerX = srcX + srcW * 0.5f + 0.04f * srcW * std::sin(t * 0.22f);
-		const float centerY = srcY + srcH * 0.5f + 0.04f * srcH * std::cos(t * 0.17f);
+	srcX += hints.anim_amp_x * srcW * std::sin(t * hints.anim_freq_x + hints.anim_phase_x);
+	srcY += hints.anim_amp_y * srcH * std::cos(t * hints.anim_freq_y + hints.anim_phase_y);
+
+	if (hints.anim_mode == kAnimSlowZoom && hints.anim_zoom_amp > 0.0f) {
+		// Zoom oscillates forever (never eases to a fixed end state and stops).
+		const float zoomWave = 0.5f + 0.5f * std::sin(t * hints.anim_zoom_freq + hints.anim_zoom_phase);
+		const float factor = 1.0f - hints.anim_zoom_amp * zoomWave;
+		const float centerX = srcX + srcW * 0.5f;
+		const float centerY = srcY + srcH * 0.5f;
 		srcW *= factor;
 		srcH *= factor;
 		srcX = centerX - srcW * 0.5f;
