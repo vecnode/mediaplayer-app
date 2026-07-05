@@ -5,9 +5,11 @@
 #include "ofMain.h"
 #include "ofVideoPlayer.h"
 
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <limits>
+#include <thread>
 
 /// Dual-buffer playback engine for images and video.
 ///
@@ -27,6 +29,11 @@ public:
 	};
 
 	using SwitchHandler = std::function<void(const SwitchResult&)>;
+
+	MediaPlaybackEngine() = default;
+	~MediaPlaybackEngine();
+	MediaPlaybackEngine(const MediaPlaybackEngine&) = delete;
+	MediaPlaybackEngine& operator=(const MediaPlaybackEngine&) = delete;
 
 	void setup();
 	void attachClipSource(const IClipSource* source);
@@ -69,9 +76,12 @@ private:
 	bool isSlotLoaded(int slotIndex) const;
 	bool loadClipIntoSlotSync(int slotIndex, std::size_t clipIndex, bool logLoad);
 	void beginAsyncLoadIntoSlot(int slotIndex, std::size_t clipIndex);
+	void beginAsyncImagePrefetch(int slotIndex, std::size_t clipIndex);
 	void tickAsyncPrefetch();
+	void tickAsyncImagePrefetch();
 	void schedulePrefetch();
 	void invalidatePreload();
+	void joinImagePrefetchThread();
 	bool isStandbyReadyFor(std::size_t expectedIndex) const;
 	void silenceStandby();
 	SwitchResult skipToIndex(std::size_t targetIndex);
@@ -103,8 +113,22 @@ private:
 
 	PrefetchLoadState prefetchLoadState = PrefetchLoadState::Idle;
 	std::size_t prefetchTargetIndex = kInvalidClipIndex;
+	bool prefetchIsImage = false;
 	int preloadRetryCooldown = 0;
 	int activeLoadGraceFrames = 0;
 	int prefetchLoadAttempts = 0;
 	int frameCounter = 0;
+
+	// Background image decode: worker thread decodes pixels (no GL calls, safe
+	// off-thread - same approach openFrameworks' own ofxThreadedImageLoader
+	// uses); the main thread uploads the finished pixels to a GPU texture in
+	// tickAsyncImagePrefetch(). imagePrefetchDone gates cross-thread visibility
+	// of imagePrefetchPixels/imagePrefetchSuccess (release in the worker,
+	// acquire on the main thread via the atomic load).
+	std::thread imagePrefetchThread;
+	std::atomic<bool> imagePrefetchDone{false};
+	bool imagePrefetchSuccess = false;
+	ofPixels imagePrefetchPixels;
+	int imagePrefetchSlot = -1;
+	std::size_t imagePrefetchClipIndex = kInvalidClipIndex;
 };
