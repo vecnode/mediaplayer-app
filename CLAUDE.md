@@ -18,6 +18,12 @@ in `AGENTS.md` — read it first.
   `cd bin && ./media-player-cpp.exe` (the exe needs `bin/` as its cwd).
 - **Threading rule:** never touch `ofVideoPlayer` off the main thread — the HTTP
   server executes commands via the polled `update()` on the GUI thread.
+  `MediaPlaybackEngine` also background-decodes the next image (`ofLoadImage`
+  into `ofPixels`, no GL) and uploads it to a texture on the main thread —
+  never call OF/GL from that worker.
+- **Clip switches must stay instant AND accurate** — prefetch into a standby
+  slot, swap only when verified ready, else fall back to a synchronous load.
+  Applies to images now too (previously synchronous-only, ~50-90ms/switch).
 - **Don't** commit `bin/*` (except `bin/data/`), `obj/`, binaries, or
   media/corpus files (`*.md`, images, `*.pt`) — all git-ignored.
 - Media/corpus + display behavior: `README.md`.

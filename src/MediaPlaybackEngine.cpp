@@ -6,6 +6,16 @@
 #include "MediaPlaybackEngine.h"
 #include "PlatformVideo.h"
 
+MediaPlaybackEngine::~MediaPlaybackEngine() {
+	joinImagePrefetchThread();
+}
+
+void MediaPlaybackEngine::joinImagePrefetchThread() {
+	if (imagePrefetchThread.joinable()) {
+		imagePrefetchThread.join();
+	}
+}
+
 void MediaPlaybackEngine::setup() {
 	ensureSlotConfigured(activeSlotIndex);
 }
@@ -72,8 +82,16 @@ bool MediaPlaybackEngine::isSlotLoaded(int slotIndex) const {
 }
 
 void MediaPlaybackEngine::invalidatePreload() {
+	// Bounded wait for an in-flight decode (milliseconds) rather than leaking
+	// the thread or racing imagePrefetchPixels/imagePrefetchSuccess.
+	joinImagePrefetchThread();
+	imagePrefetchDone = false;
+	imagePrefetchSlot = -1;
+	imagePrefetchClipIndex = kInvalidClipIndex;
+
 	prefetchLoadState = PrefetchLoadState::Idle;
 	prefetchTargetIndex = kInvalidClipIndex;
+	prefetchIsImage = false;
 	prefetchLoadAttempts = 0;
 }
 
@@ -154,7 +172,7 @@ void MediaPlaybackEngine::beginAsyncLoadIntoSlot(int slotIndex, std::size_t clip
 
 	const MediaClip& clip = clipSource->clipAt(clipIndex);
 	if (clip.mediaType == ClipMediaType::Image) {
-		// Images are large — load only when the user switches clips.
+		beginAsyncImagePrefetch(slotIndex, clipIndex);
 		return;
 	}
 
@@ -166,6 +184,7 @@ void MediaPlaybackEngine::beginAsyncLoadIntoSlot(int slotIndex, std::size_t clip
 	clearSlot(slotIndex);
 	prefetchLoadState = PrefetchLoadState::Loading;
 	prefetchTargetIndex = clipIndex;
+	prefetchIsImage = false;
 	prefetchLoadAttempts = 0;
 
 	slots[slotIndex].loadAsync(PlatformVideo::loadPath(absPath));
@@ -173,8 +192,80 @@ void MediaPlaybackEngine::beginAsyncLoadIntoSlot(int slotIndex, std::size_t clip
 	ofLogVerbose("MediaPlaybackEngine") << "Async prefetch started: " << clip.displayName;
 }
 
+void MediaPlaybackEngine::beginAsyncImagePrefetch(int slotIndex, std::size_t clipIndex) {
+	if (!clipSource || clipIndex >= clipSource->size()) {
+		return;
+	}
+
+	// Decode is fast (a scanned page is a few ms to a few tens of ms), so
+	// joining any prior in-flight prefetch here should not stall noticeably.
+	joinImagePrefetchThread();
+
+	const MediaClip& clip = clipSource->clipAt(clipIndex);
+	of::filesystem::path absPath = clip.absolutePath;
+	absPath.make_preferred();
+
+	clearSlot(slotIndex);
+	prefetchLoadState = PrefetchLoadState::Loading;
+	prefetchTargetIndex = clipIndex;
+	prefetchIsImage = true;
+	prefetchLoadAttempts = 0;
+
+	imagePrefetchDone = false;
+	imagePrefetchSuccess = false;
+	imagePrefetchSlot = slotIndex;
+	imagePrefetchClipIndex = clipIndex;
+
+	// Decode-only (no GL calls) on the worker thread - the same approach
+	// openFrameworks' ofxThreadedImageLoader uses. The GPU texture upload
+	// happens later, on the main thread, in tickAsyncImagePrefetch().
+	imagePrefetchThread = std::thread([this, absPath]() {
+		ofPixels pixels;
+		const bool ok = ofLoadImage(pixels, absPath);
+		imagePrefetchPixels = std::move(pixels);
+		imagePrefetchSuccess = ok;
+		imagePrefetchDone = true;
+	});
+
+	ofLogVerbose("MediaPlaybackEngine") << "Async image prefetch started: " << clip.displayName;
+}
+
+void MediaPlaybackEngine::tickAsyncImagePrefetch() {
+	if (!imagePrefetchDone) {
+		return;
+	}
+
+	joinImagePrefetchThread();
+
+	const int slotIndex = imagePrefetchSlot;
+	const std::size_t clipIndex = imagePrefetchClipIndex;
+
+	if (imagePrefetchSuccess && slotIndex >= 0) {
+		imageSlots[slotIndex].setFromPixels(imagePrefetchPixels);
+		slotsIsImage[slotIndex] = true;
+		slotsClipIndex[slotIndex] = clipIndex;
+		ofLogVerbose("MediaPlaybackEngine") << "Async image prefetch ready: "
+			<< clipSource->clipAt(clipIndex).displayName;
+	} else {
+		ofLogWarning("MediaPlaybackEngine") << "Async image prefetch failed for index " << clipIndex;
+	}
+
+	imagePrefetchPixels.clear();
+	imagePrefetchSlot = -1;
+	imagePrefetchClipIndex = kInvalidClipIndex;
+	imagePrefetchDone = false;
+	prefetchLoadState = PrefetchLoadState::Idle;
+	prefetchIsImage = false;
+	prefetchLoadAttempts = 0;
+}
+
 void MediaPlaybackEngine::tickAsyncPrefetch() {
 	if (prefetchLoadState != PrefetchLoadState::Loading || !clipSource) {
+		return;
+	}
+
+	if (prefetchIsImage) {
+		tickAsyncImagePrefetch();
 		return;
 	}
 
@@ -223,10 +314,6 @@ void MediaPlaybackEngine::schedulePrefetch() {
 	}
 
 	const std::size_t nextIndex = clipSource->nextIndex(currentClipIndex);
-
-	if (clipSource->clipAt(nextIndex).mediaType == ClipMediaType::Image) {
-		return;
-	}
 
 	if (isStandbyReadyFor(nextIndex)) {
 		return;

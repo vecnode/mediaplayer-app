@@ -92,7 +92,22 @@ src/
   state in the engine/controller, not the server.
 - **Threading:** never touch `ofVideoPlayer` off the main thread. The HTTP server
   only queues/executes via the polled `update()` on the GUI thread — preserve
-  that.
+  that. `MediaPlaybackEngine` also runs a background image-decode thread
+  (`beginAsyncImagePrefetch`/`tickAsyncImagePrefetch`) to prefetch the next
+  image ahead of a switch — this is decode-only (`ofLoadImage` into `ofPixels`,
+  no GL calls), the same pattern `ofxThreadedImageLoader` uses; the GPU texture
+  upload (`setFromPixels`) still happens on the main thread in
+  `tickAsyncImagePrefetch()`. Never call OF/GL APIs from that worker thread.
+- **Clip switching must stay both instant and accurate.** `next`/`previous`
+  swap from a prefetched standby slot when ready (`isStandbyReadyFor`) and only
+  fall back to a synchronous load otherwise — this applies to images now too
+  (previously images had no prefetch path at all and always loaded
+  synchronously on every switch, ~50-90ms per call). Any change to the
+  prefetch/switch state machine in `MediaPlaybackEngine` must preserve the
+  invariant that a switch never reports/display a clip other than the one it
+  claims to (no stale swaps) — verified by hammering `/api/next` back-to-back
+  and checking the returned `clipIndex`/`clipName` sequence has no skips or
+  duplicates.
 - **Media data** lives in `bin/data/` and is **not** deleted by builds. Region
   framing + the green debug box require entries in `OBJS_TEXT.md` with
   `text_regions`; `PDF_TEXT.md` covers OCR-only subtitles.
