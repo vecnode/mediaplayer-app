@@ -178,14 +178,16 @@ void MediaPanel::pickAnimationForSelection() {
 
 	animAmpX_ = ampX;
 	animAmpY_ = ampY;
-	animFreqX_ = ofRandom(0.35f, 0.65f);
-	animFreqY_ = ofRandom(0.30f, 0.60f);
+	// ~20% slower than the initial dynamic pass (same amplitude, less
+	// dizzying pace) - a full swing now takes roughly 12-22s.
+	animFreqX_ = ofRandom(0.28f, 0.52f);
+	animFreqY_ = ofRandom(0.24f, 0.48f);
 	animPhaseX_ = ofRandom(0.0f, TWO_PI);
 	animPhaseY_ = ofRandom(0.0f, TWO_PI);
 
 	if (selectedAnimMode_ == kAnimSlowZoom) {
 		animZoomAmp_ = ofRandom(0.15f, 0.30f);
-		animZoomFreq_ = ofRandom(0.10f, 0.20f);
+		animZoomFreq_ = ofRandom(0.08f, 0.16f);
 		animZoomPhase_ = ofRandom(0.0f, TWO_PI);
 	} else {
 		animZoomAmp_ = 0.0f;
