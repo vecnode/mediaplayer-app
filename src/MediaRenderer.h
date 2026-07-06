@@ -41,6 +41,21 @@ struct ImageDrawHints {
 	float anim_zoom_amp = 0.0f;
 	float anim_zoom_freq = 0.08f;
 	float anim_zoom_phase = 0.0f;
+
+	/// One neighbor clip's thumbnail overlaid into a blank/text-free spot on
+	/// the current image (see MediaCorpusProvider::emptyAreaRects). Rect is in
+	/// full-image pixel coordinates, so it tracks the current image's pan/zoom
+	/// automatically - the overlay stays glued to the same spot as it animates.
+	struct NeighborOverlaySlot {
+		bool has_rect = false;
+		float rect_x = 0.0f;
+		float rect_y = 0.0f;
+		float rect_w = 0.0f;
+		float rect_h = 0.0f;
+		const ofImage* thumb = nullptr; // non-owning
+	};
+	static constexpr int kMaxNeighborOverlays = 4;
+	NeighborOverlaySlot neighbor_overlays[kMaxNeighborOverlays];
 };
 
 enum SelectionAnimMode {
