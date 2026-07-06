@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 
 namespace {
 
@@ -21,6 +22,91 @@ ofRectangle defaultMediaBounds() {
 	const float mediaW = w * kMediaScale;
 	const float mediaH = h * kMediaScale;
 	return {(w - mediaW) * 0.5f, (h - mediaH) * 0.5f, mediaW, mediaH};
+}
+
+/// Finds up to `maxCount` axis-aligned rectangles (full-image pixel coords)
+/// that are genuinely blank page background, via a coarse grid scan sampling
+/// actual pixel brightness - not a proxy via OCR text-region boxes, which
+/// only box specific labeled fields (e.g. "Subject:") and leave real
+/// paragraph text completely unmarked, letting overlays land right on top of
+/// visible content. Sorted largest-first; merges contiguous blank cells
+/// along each row into wider candidates.
+std::vector<metaagent::media::IntRect> computeWhiteAreaRects(const ofPixels& pixels, std::size_t maxCount) {
+	std::vector<metaagent::media::IntRect> result;
+
+	const int width = static_cast<int>(pixels.getWidth());
+	const int height = static_cast<int>(pixels.getHeight());
+	if (width <= 0 || height <= 0) {
+		return result;
+	}
+
+	constexpr int kGridCols = 8;
+	constexpr int kGridRows = 10;
+	constexpr int kSampleStride = 4;
+	constexpr unsigned char kWhiteChannelThreshold = 235;
+	constexpr float kBlankCellFraction = 0.94f;
+
+	const int cellW = width / kGridCols;
+	const int cellH = height / kGridRows;
+	if (cellW <= 0 || cellH <= 0) {
+		return result;
+	}
+
+	bool blank[kGridRows][kGridCols] = {};
+	for (int r = 0; r < kGridRows; ++r) {
+		for (int c = 0; c < kGridCols; ++c) {
+			const int startX = c * cellW;
+			const int startY = r * cellH;
+			const int endX = std::min(width, startX + cellW);
+			const int endY = std::min(height, startY + cellH);
+
+			int sampleCount = 0;
+			int whiteCount = 0;
+			for (int y = startY; y < endY; y += kSampleStride) {
+				for (int x = startX; x < endX; x += kSampleStride) {
+					const ofColor color = pixels.getColor(x, y);
+					++sampleCount;
+					if (color.r >= kWhiteChannelThreshold
+						&& color.g >= kWhiteChannelThreshold
+						&& color.b >= kWhiteChannelThreshold) {
+						++whiteCount;
+					}
+				}
+			}
+
+			blank[r][c] = sampleCount > 0
+				&& (static_cast<float>(whiteCount) / static_cast<float>(sampleCount)) >= kBlankCellFraction;
+		}
+	}
+
+	for (int r = 0; r < kGridRows; ++r) {
+		int c = 0;
+		while (c < kGridCols) {
+			if (!blank[r][c]) {
+				++c;
+				continue;
+			}
+			const int startCol = c;
+			while (c < kGridCols && blank[r][c]) {
+				++c;
+			}
+
+			metaagent::media::IntRect rect;
+			rect.x = startCol * cellW;
+			rect.y = r * cellH;
+			rect.width = (c - startCol) * cellW;
+			rect.height = cellH;
+			result.push_back(rect);
+		}
+	}
+
+	std::sort(result.begin(), result.end(), [](const metaagent::media::IntRect& a, const metaagent::media::IntRect& b) {
+		return (static_cast<int64_t>(a.width) * a.height) > (static_cast<int64_t>(b.width) * b.height);
+	});
+	if (result.size() > maxCount) {
+		result.resize(maxCount);
+	}
+	return result;
 }
 
 } // namespace
@@ -148,17 +234,30 @@ void MediaPanel::refreshNeighborOverlays() {
 		return out.load(clip.absolutePath) ? &out : nullptr;
 	};
 
-	// Priority order: the immediate neighbors get the biggest blank spots
-	// found; the "2 away" neighbors take whatever's left.
-	const ofImage* images[4] = {
+	std::vector<const ofImage*> images = {
 		loadIfImage(prev1Index, prevThumb1_),
 		loadIfImage(next1Index, nextThumb1_),
 		loadIfImage(prev2Index, prevThumb2_),
 		loadIfImage(next2Index, nextThumb2_),
 	};
+	images.erase(std::remove(images.begin(), images.end(), nullptr), images.end());
 
-	const std::vector<metaagent::media::IntRect> rects = corpus_.emptyAreaRects(
-		loadedPath, static_cast<std::size_t>(ImageDrawHints::kMaxNeighborOverlays));
+	// Randomly occupy the blank spots rather than a fixed prev/next priority
+	// order, so which neighbor lands where varies clip to clip.
+	for (std::size_t i = images.size(); i > 1; --i) {
+		const std::size_t j = static_cast<std::size_t>(ofRandom(static_cast<float>(i)));
+		std::swap(images[i - 1], images[j]);
+	}
+
+	// Real pixel-based blank-area detection (not an OCR-region proxy, which
+	// only boxes specific labeled fields and leaves real paragraph text
+	// unmarked - that let overlays land on top of visible content).
+	const std::string& currentAbsolutePath = library.clipAt(currentIndex).absolutePath;
+	ofPixels currentPixels;
+	std::vector<metaagent::media::IntRect> rects;
+	if (!currentAbsolutePath.empty() && ofLoadImage(currentPixels, currentAbsolutePath)) {
+		rects = computeWhiteAreaRects(currentPixels, static_cast<std::size_t>(ImageDrawHints::kMaxNeighborOverlays));
+	}
 
 	// Small tilt, chosen once per assignment (never re-rolled per frame) so the
 	// collage reads as tastefully scattered prints rather than jittering.
@@ -166,9 +265,6 @@ void MediaPanel::refreshNeighborOverlays() {
 
 	std::size_t rectIndex = 0;
 	for (const ofImage* image : images) {
-		if (!image) {
-			continue;
-		}
 		if (rectIndex >= rects.size()) {
 			break;
 		}

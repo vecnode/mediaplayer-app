@@ -5,7 +5,6 @@
 
 #include "MediaCorpusProvider.h"
 
-#include <algorithm>
 #include <limits>
 #include <vector>
 
@@ -160,69 +159,3 @@ std::size_t MediaCorpusProvider::entriesWithRegionsCount() const {
 	return corpus_.countEntriesWithRegions();
 }
 
-std::vector<metaagent::media::IntRect> MediaCorpusProvider::emptyAreaRects(
-	const std::string& clipPath, const std::size_t maxCount) const {
-	std::vector<metaagent::media::IntRect> result;
-
-	const metaagent::media::ImageCorpusEntry* entry = findForClip(clipPath);
-	if (!entry || entry->image_width <= 0 || entry->image_height <= 0) {
-		return result;
-	}
-
-	constexpr int kGridCols = 4;
-	constexpr int kGridRows = 6;
-	constexpr int kMarginPx = 10;
-
-	const int cellW = entry->image_width / kGridCols;
-	const int cellH = entry->image_height / kGridRows;
-	if (cellW <= 0 || cellH <= 0) {
-		return result;
-	}
-
-	bool occupied[kGridRows][kGridCols] = {};
-	for (const auto& region : entry->text_regions) {
-		if (region.bbox.width <= 0 || region.bbox.height <= 0) {
-			continue;
-		}
-		const int minCol = std::max(0, (region.bbox.x - kMarginPx) / cellW);
-		const int maxCol = std::min(kGridCols - 1, (region.bbox.x + region.bbox.width + kMarginPx) / cellW);
-		const int minRow = std::max(0, (region.bbox.y - kMarginPx) / cellH);
-		const int maxRow = std::min(kGridRows - 1, (region.bbox.y + region.bbox.height + kMarginPx) / cellH);
-		for (int r = minRow; r <= maxRow; ++r) {
-			for (int c = minCol; c <= maxCol; ++c) {
-				occupied[r][c] = true;
-			}
-		}
-	}
-
-	// Merge contiguous empty cells along each row into wider candidate rects,
-	// rather than leaving lots of postage-stamp-sized single cells.
-	for (int r = 0; r < kGridRows; ++r) {
-		int c = 0;
-		while (c < kGridCols) {
-			if (occupied[r][c]) {
-				++c;
-				continue;
-			}
-			const int startCol = c;
-			while (c < kGridCols && !occupied[r][c]) {
-				++c;
-			}
-
-			metaagent::media::IntRect rect;
-			rect.x = startCol * cellW;
-			rect.y = r * cellH;
-			rect.width = (c - startCol) * cellW;
-			rect.height = cellH;
-			result.push_back(rect);
-		}
-	}
-
-	std::sort(result.begin(), result.end(), [](const metaagent::media::IntRect& a, const metaagent::media::IntRect& b) {
-		return (static_cast<int64_t>(a.width) * a.height) > (static_cast<int64_t>(b.width) * b.height);
-	});
-	if (result.size() > maxCount) {
-		result.resize(maxCount);
-	}
-	return result;
-}
