@@ -53,6 +53,10 @@ struct ImageDrawHints {
 		float rect_w = 0.0f;
 		float rect_h = 0.0f;
 		const ofImage* thumb = nullptr; // non-owning
+		// Small fixed per-slot tilt (degrees), chosen once when the slot is
+		// assigned so the "photo print" look reads as scattered but stable -
+		// never re-rolled or animated frame to frame.
+		float rotation_deg = 0.0f;
 	};
 	static constexpr int kMaxNeighborOverlays = 4;
 	NeighborOverlaySlot neighbor_overlays[kMaxNeighborOverlays];
