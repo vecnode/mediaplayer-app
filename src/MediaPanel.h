@@ -9,7 +9,6 @@
 #include <functional>
 #include <limits>
 #include <string>
-#include <vector>
 
 /// Composes playlist source + playback engine (stable facade for ofApp / controller).
 class MediaPanel {
@@ -60,7 +59,7 @@ private:
 	void refreshImageDrawHints(const ofRectangle& bounds);
 	void onClipSwitched(const MediaPlaybackEngine::SwitchResult& result);
 	void pickAnimationForSelection();
-	void refreshNeighborOverlays();
+	void refreshNeighborThumbnails();
 
 	ClipChangedHandler clipChangedHandler;
 
@@ -71,21 +70,15 @@ private:
 	std::string loadedPath;
 	mutable ofRectangle lastDrawBounds_;
 
-	// Previous/next-2 thumbnails overlaid into blank spots on the current
-	// image (see refreshNeighborOverlays()). Loaded only on an actual clip
-	// switch; imageDrawHints_.neighbor_overlays is refreshed from
-	// neighborOverlayAssignments_ on every refreshImageDrawHints() call
-	// (including resize) without reloading anything.
-	struct NeighborOverlayAssignment {
-		metaagent::media::IntRect rect;
-		const ofImage* thumb = nullptr;
-		float rotationDeg = 0.0f;
-	};
+	// Previous/next-2 thumbnails, shown as equal-size mosaic cells alongside
+	// the current image (see refreshNeighborThumbnails()). Loaded only on an
+	// actual clip switch; imageDrawHints_'s neighbor pointers are refreshed
+	// from these on every refreshImageDrawHints() call (including resize)
+	// without reloading anything.
 	ofImage prevThumb1_;
 	ofImage prevThumb2_;
 	ofImage nextThumb1_;
 	ofImage nextThumb2_;
-	std::vector<NeighborOverlayAssignment> neighborOverlayAssignments_;
 	std::size_t selectedRegionIndex_ = std::numeric_limits<std::size_t>::max();
 	bool showRegionBBox_ = true;
 	// Region pan is the default display mode; zoom is the opt-in alternative.
