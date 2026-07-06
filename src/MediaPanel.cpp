@@ -109,6 +109,44 @@ std::vector<metaagent::media::IntRect> computeWhiteAreaRects(const ofPixels& pix
 	return result;
 }
 
+/// Picks a zoomed-in crop rect (in `image`'s own pixel coords) showing one
+/// interesting detail - a detected OCR text region if the corpus has one for
+/// this clip, expanded into a squarer, padded window for context - so the
+/// overlay reads as a genuine cut piece of content, never the whole neighbor
+/// page shrunk to an illegible square. Falls back to a modest random crop
+/// when there's no corpus data for that clip.
+metaagent::media::IntRect pickInterestingCropRect(
+	const MediaCorpusProvider& corpus, const std::string& clipDisplayName, int imageWidth, int imageHeight) {
+	metaagent::media::IntRect cropRect;
+
+	metaagent::media::IntRect regionBbox {};
+	const std::size_t regionIndex = corpus.pickRandomRegionIndex(clipDisplayName);
+	if (regionIndex != std::numeric_limits<std::size_t>::max()
+		&& corpus.regionBboxForClip(clipDisplayName, regionIndex, regionBbox)
+		&& regionBbox.width > 0 && regionBbox.height > 0) {
+		const int centerX = regionBbox.x + regionBbox.width / 2;
+		const int centerY = regionBbox.y + regionBbox.height / 2;
+		const int longSide = std::max(regionBbox.width, regionBbox.height);
+		const int size = std::max(longSide + longSide / 2, 60);
+
+		cropRect.width = std::min(size, imageWidth);
+		cropRect.height = std::min(size, imageHeight);
+		cropRect.x = std::max(0, std::min(centerX - cropRect.width / 2, imageWidth - cropRect.width));
+		cropRect.y = std::max(0, std::min(centerY - cropRect.height / 2, imageHeight - cropRect.height));
+		return cropRect;
+	}
+
+	// No OCR region for this clip - a modest random crop, never the whole page.
+	const int size = std::max(60, std::min(imageWidth, imageHeight) / 4);
+	cropRect.width = std::min(size, imageWidth);
+	cropRect.height = std::min(size, imageHeight);
+	const int maxX = imageWidth - cropRect.width;
+	const int maxY = imageHeight - cropRect.height;
+	cropRect.x = maxX > 0 ? static_cast<int>(ofRandom(static_cast<float>(maxX))) : 0;
+	cropRect.y = maxY > 0 ? static_cast<int>(ofRandom(static_cast<float>(maxY))) : 0;
+	return cropRect;
+}
+
 } // namespace
 
 void MediaPanel::syncLoadedPath() {
@@ -201,6 +239,10 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 		slot.rect_h = static_cast<float>(assignment.rect.height);
 		slot.thumb = assignment.thumb;
 		slot.rotation_deg = assignment.rotationDeg;
+		slot.source_crop_x = static_cast<float>(assignment.sourceCropRect.x);
+		slot.source_crop_y = static_cast<float>(assignment.sourceCropRect.y);
+		slot.source_crop_w = static_cast<float>(assignment.sourceCropRect.width);
+		slot.source_crop_h = static_cast<float>(assignment.sourceCropRect.height);
 	}
 
 	engine.setImageDrawHints(&imageDrawHints_);
@@ -223,30 +265,38 @@ void MediaPanel::refreshNeighborOverlays() {
 	const std::size_t next1Index = library.nextIndex(currentIndex);
 	const std::size_t next2Index = library.nextIndex(next1Index);
 
-	auto loadIfImage = [&](std::size_t index, ofImage& out) -> const ofImage* {
+	struct NeighborCandidate {
+		const ofImage* image = nullptr;
+		std::string displayName;
+	};
+
+	auto loadIfImage = [&](std::size_t index, ofImage& out) -> NeighborCandidate {
 		if (index == currentIndex) {
-			return nullptr;
+			return {};
 		}
 		const MediaClip& clip = library.clipAt(index);
 		if (clip.mediaType != ClipMediaType::Image || clip.absolutePath.empty()) {
-			return nullptr;
+			return {};
 		}
-		return out.load(clip.absolutePath) ? &out : nullptr;
+		return out.load(clip.absolutePath) ? NeighborCandidate{&out, clip.displayName} : NeighborCandidate{};
 	};
 
-	std::vector<const ofImage*> images = {
+	std::vector<NeighborCandidate> candidates = {
 		loadIfImage(prev1Index, prevThumb1_),
 		loadIfImage(next1Index, nextThumb1_),
 		loadIfImage(prev2Index, prevThumb2_),
 		loadIfImage(next2Index, nextThumb2_),
 	};
-	images.erase(std::remove(images.begin(), images.end(), nullptr), images.end());
+	candidates.erase(
+		std::remove_if(candidates.begin(), candidates.end(),
+			[](const NeighborCandidate& c) { return c.image == nullptr; }),
+		candidates.end());
 
 	// Randomly occupy the blank spots rather than a fixed prev/next priority
 	// order, so which neighbor lands where varies clip to clip.
-	for (std::size_t i = images.size(); i > 1; --i) {
+	for (std::size_t i = candidates.size(); i > 1; --i) {
 		const std::size_t j = static_cast<std::size_t>(ofRandom(static_cast<float>(i)));
-		std::swap(images[i - 1], images[j]);
+		std::swap(candidates[i - 1], candidates[j]);
 	}
 
 	// Real pixel-based blank-area detection (not an OCR-region proxy, which
@@ -264,12 +314,15 @@ void MediaPanel::refreshNeighborOverlays() {
 	constexpr float kMaxTiltDeg = 6.0f;
 
 	std::size_t rectIndex = 0;
-	for (const ofImage* image : images) {
+	for (const NeighborCandidate& candidate : candidates) {
 		if (rectIndex >= rects.size()) {
 			break;
 		}
+		const metaagent::media::IntRect cropRect = pickInterestingCropRect(
+			corpus_, candidate.displayName,
+			static_cast<int>(candidate.image->getWidth()), static_cast<int>(candidate.image->getHeight()));
 		neighborOverlayAssignments_.push_back(
-			{rects[rectIndex], image, ofRandom(-kMaxTiltDeg, kMaxTiltDeg)});
+			{rects[rectIndex], candidate.image, ofRandom(-kMaxTiltDeg, kMaxTiltDeg), cropRect});
 		++rectIndex;
 	}
 }

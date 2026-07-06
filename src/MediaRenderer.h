@@ -57,6 +57,14 @@ struct ImageDrawHints {
 		// assigned so the "photo print" look reads as scattered but stable -
 		// never re-rolled or animated frame to frame.
 		float rotation_deg = 0.0f;
+		// Which part of `thumb` to show, in ITS OWN pixel coordinates - a
+		// zoomed-in cut of one interesting detail (e.g. a detected text
+		// region), not the whole neighbor page shrunk to a tiny illegible
+		// square. Chosen once when the slot is assigned.
+		float source_crop_x = 0.0f;
+		float source_crop_y = 0.0f;
+		float source_crop_w = 0.0f;
+		float source_crop_h = 0.0f;
 	};
 	static constexpr int kMaxNeighborOverlays = 4;
 	NeighborOverlaySlot neighbor_overlays[kMaxNeighborOverlays];

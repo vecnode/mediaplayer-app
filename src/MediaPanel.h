@@ -80,6 +80,9 @@ private:
 		metaagent::media::IntRect rect;
 		const ofImage* thumb = nullptr;
 		float rotationDeg = 0.0f;
+		// Which part of `thumb` to show (its own pixel coords) - a zoomed-in
+		// cut of one interesting detail, not the whole neighbor page.
+		metaagent::media::IntRect sourceCropRect;
 	};
 	ofImage prevThumb1_;
 	ofImage prevThumb2_;

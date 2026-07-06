@@ -153,31 +153,33 @@ void drawDebugRegionForLayout(
 	drawDebugRegionOutline(screenRect);
 }
 
-/// Cover-fits `thumb` into `screenRect` (scales to fill, cropping overflow on
-/// one axis), centered - no animation of its own since it inherits the host
-/// rect's motion for free (the rect is mapped through the current image's own
-/// pan/zoom crop every frame).
-void drawCoverFit(const ofImage& thumb, const ofRectangle& screenRect) {
-	const float imgW = static_cast<float>(thumb.getWidth());
-	const float imgH = static_cast<float>(thumb.getHeight());
-	if (imgW <= 0.0f || imgH <= 0.0f) {
+/// Cover-fits the `cropX/Y/W/H` region of `thumb` (its own pixel coords) into
+/// `screenRect` (scales to fill, cropping overflow on one axis, centered) -
+/// a zoomed-in cut of one piece of the neighbor image, not the whole page.
+/// No animation of its own since it inherits the host rect's motion for free
+/// (the destination rect is mapped through the current image's own pan/zoom
+/// crop every frame).
+void drawCoverFitFromRect(
+	const ofImage& thumb, const ofRectangle& screenRect,
+	float cropX, float cropY, float cropW, float cropH) {
+	if (cropW <= 0.0f || cropH <= 0.0f) {
 		return;
 	}
 
 	const float destAspect = screenRect.width / screenRect.height;
-	const float imgAspect = imgW / imgH;
+	const float cropAspect = cropW / cropH;
 
-	float srcW = imgW;
-	float srcH = imgH;
-	if (imgAspect > destAspect) {
-		srcH = imgH;
-		srcW = imgH * destAspect;
+	float srcW = cropW;
+	float srcH = cropH;
+	if (cropAspect > destAspect) {
+		srcH = cropH;
+		srcW = cropH * destAspect;
 	} else {
-		srcW = imgW;
-		srcH = imgW / destAspect;
+		srcW = cropW;
+		srcH = cropW / destAspect;
 	}
-	const float srcX = (imgW - srcW) * 0.5f;
-	const float srcY = (imgH - srcH) * 0.5f;
+	const float srcX = cropX + (cropW - srcW) * 0.5f;
+	const float srcY = cropY + (cropH - srcH) * 0.5f;
 
 	thumb.drawSubsection(screenRect.x, screenRect.y, screenRect.width, screenRect.height, srcX, srcY, srcW, srcH);
 }
@@ -239,7 +241,9 @@ void drawNeighborOverlays(
 			-halfW - kNeighborOverlayBorderPx, -halfH - kNeighborOverlayBorderPx,
 			tileW + kNeighborOverlayBorderPx * 2.0f, tileH + kNeighborOverlayBorderPx * 2.0f);
 
-		drawCoverFit(*slot.thumb, {-halfW, -halfH, tileW, tileH});
+		drawCoverFitFromRect(
+			*slot.thumb, {-halfW, -halfH, tileW, tileH},
+			slot.source_crop_x, slot.source_crop_y, slot.source_crop_w, slot.source_crop_h);
 
 		ofNoFill();
 		ofSetColor(0, 0, 0, 70);
