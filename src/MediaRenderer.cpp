@@ -153,102 +153,97 @@ void drawDebugRegionForLayout(
 	drawDebugRegionOutline(screenRect);
 }
 
-/// Cover-fits `thumb` into `screenRect` (scales to fill, cropping overflow on
-/// one axis), centered - no animation of its own since it inherits the host
-/// rect's motion for free (the rect is mapped through the current image's own
-/// pan/zoom crop every frame).
-void drawCoverFit(const ofImage& thumb, const ofRectangle& screenRect) {
-	const float imgW = static_cast<float>(thumb.getWidth());
-	const float imgH = static_cast<float>(thumb.getHeight());
+/// A "cross" world: current sits in the center panel, one neighbor touches
+/// each of its four edges (top/left/right/bottom), all panels the same size
+/// as `bounds`. The camera (viewport) is also `bounds`-sized and pans/zooms
+/// through this bigger virtual canvas via the exact same animation math as
+/// the single-image case, so it can drift off the current panel and reveal
+/// a neighbor at the screen edge.
+///
+/// The 3x3 world's four corners (e.g. above-and-right of current, where the
+/// top and right panels would meet diagonally) have no neighbor of their
+/// own - there's no "diagonal" clip in a linear prev/next sequence. Rather
+/// than block diagonal camera movement to avoid exposing those corners,
+/// the top/bottom panels are widened to the FULL world width and the
+/// left/right panels to the full world height, so each corner is actually
+/// covered twice over (drawn last wins) with real, if more cropped, image
+/// content - free diagonal movement, never a gap. Draw order: top, bottom,
+/// left, right, then current last (always fully within its own cell, so it
+/// never gets overdrawn).
+struct CrossPanel {
+	const ofImage* image = nullptr;
+	ofRectangle worldRect;
+};
+
+struct CrossWorld {
+	float worldW = 0.0f;
+	float worldH = 0.0f;
+	ofRectangle currentRect;
+	CrossPanel panels[5];
+};
+
+CrossWorld computeCrossWorld(const ofImage& current, const ImageDrawHints& hints, const ofRectangle& bounds) {
+	CrossWorld world;
+	const float panelW = bounds.width;
+	const float panelH = bounds.height;
+	world.worldW = panelW * 3.0f;
+	world.worldH = panelH * 3.0f;
+	world.currentRect = {panelW, panelH, panelW, panelH};
+
+	world.panels[0] = {hints.neighbor_prev1, {0.0f, 0.0f, world.worldW, panelH}};              // top, full width
+	world.panels[1] = {hints.neighbor_next2, {0.0f, panelH * 2.0f, world.worldW, panelH}};      // bottom, full width
+	world.panels[2] = {hints.neighbor_prev2, {0.0f, 0.0f, panelW, world.worldH}};                // left, full height
+	world.panels[3] = {hints.neighbor_next1, {panelW * 2.0f, 0.0f, panelW, world.worldH}};       // right, full height
+	world.panels[4] = {&current, world.currentRect};                                             // center, drawn last
+	return world;
+}
+
+/// Cover-fit scale+offset that places `imgW x imgH` into `panelRect` with no
+/// letterboxing (crops overflow instead).
+void coverFitTransform(
+	float imgW, float imgH, const ofRectangle& panelRect,
+	float& scale, float& offsetX, float& offsetY) {
+	scale = std::max(panelRect.width / imgW, panelRect.height / imgH);
+	offsetX = (panelRect.width - imgW * scale) * 0.5f;
+	offsetY = (panelRect.height - imgH * scale) * 0.5f;
+}
+
+/// Draws whatever part of `panel` falls within `viewport` (both in world
+/// coordinates), mapped onto the matching part of `destBounds` on screen.
+void drawCrossPanelIntersection(const CrossPanel& panel, const ofRectangle& viewport, const ofRectangle& destBounds) {
+	if (!panel.image || !panel.image->isAllocated()) {
+		return;
+	}
+
+	const float ix = std::max(panel.worldRect.x, viewport.x);
+	const float iy = std::max(panel.worldRect.y, viewport.y);
+	const float ix2 = std::min(panel.worldRect.x + panel.worldRect.width, viewport.x + viewport.width);
+	const float iy2 = std::min(panel.worldRect.y + panel.worldRect.height, viewport.y + viewport.height);
+	const float iw = ix2 - ix;
+	const float ih = iy2 - iy;
+	if (iw <= 0.0f || ih <= 0.0f) {
+		return;
+	}
+
+	const float imgW = static_cast<float>(panel.image->getWidth());
+	const float imgH = static_cast<float>(panel.image->getHeight());
 	if (imgW <= 0.0f || imgH <= 0.0f) {
 		return;
 	}
 
-	const float destAspect = screenRect.width / screenRect.height;
-	const float imgAspect = imgW / imgH;
+	float scale = 1.0f, offsetX = 0.0f, offsetY = 0.0f;
+	coverFitTransform(imgW, imgH, panel.worldRect, scale, offsetX, offsetY);
 
-	float srcW = imgW;
-	float srcH = imgH;
-	if (imgAspect > destAspect) {
-		srcH = imgH;
-		srcW = imgH * destAspect;
-	} else {
-		srcW = imgW;
-		srcH = imgW / destAspect;
-	}
-	const float srcX = (imgW - srcW) * 0.5f;
-	const float srcY = (imgH - srcH) * 0.5f;
+	const float srcX = (ix - panel.worldRect.x - offsetX) / scale;
+	const float srcY = (iy - panel.worldRect.y - offsetY) / scale;
+	const float srcW = iw / scale;
+	const float srcH = ih / scale;
 
-	thumb.drawSubsection(screenRect.x, screenRect.y, screenRect.width, screenRect.height, srcX, srcY, srcW, srcH);
-}
+	const ofRectangle screenRect = mapImageRectToScreen(
+		destBounds, viewport.x, viewport.y, viewport.width, viewport.height, ix, iy, iw, ih);
 
-// Hard cap on each overlay's on-screen footprint - small "photo print"
-// snippets, never a large patch, however big the blank area behind them is.
-constexpr float kNeighborOverlayMaxPx = 50.0f;
-constexpr float kNeighborOverlayBorderPx = 3.0f;
-constexpr float kNeighborOverlayShadowOffsetPx = 2.5f;
-
-/// Draws each neighbor-clip overlay (if present) mapped from full-image pixel
-/// coordinates into the current on-screen crop window, so overlays stay
-/// glued to their assigned blank spot as the current image pans/zooms. Each
-/// is rendered as a small (<= 50x50px), bordered, drop-shadowed, gently
-/// tilted print - a tasteful collage accent, never competing with the
-/// current image for attention.
-void drawNeighborOverlays(
-	const ImageDrawHints* hints,
-	const ofRectangle& dest,
-	float cropSrcX, float cropSrcY, float cropSrcW, float cropSrcH) {
-	if (!hints || cropSrcW <= 0.0f || cropSrcH <= 0.0f) {
-		return;
-	}
-
-	for (const auto& slot : hints->neighbor_overlays) {
-		if (!slot.has_rect || !slot.thumb || !slot.thumb->isAllocated()) {
-			continue;
-		}
-
-		const ofRectangle mapped = mapImageRectToScreen(
-			dest, cropSrcX, cropSrcY, cropSrcW, cropSrcH,
-			slot.rect_x, slot.rect_y, slot.rect_w, slot.rect_h);
-		if (mapped.width <= 2.0f || mapped.height <= 2.0f) {
-			continue;
-		}
-
-		const float tileW = std::min(mapped.width, kNeighborOverlayMaxPx);
-		const float tileH = std::min(mapped.height, kNeighborOverlayMaxPx);
-		const float centerX = mapped.x + mapped.width * 0.5f;
-		const float centerY = mapped.y + mapped.height * 0.5f;
-		const float halfW = tileW * 0.5f;
-		const float halfH = tileH * 0.5f;
-
-		ofPushStyle();
-		ofPushMatrix();
-		ofTranslate(centerX, centerY);
-		ofRotateDeg(slot.rotation_deg);
-
-		ofFill();
-		ofSetColor(0, 0, 0, 80);
-		ofDrawRectangle(
-			-halfW - kNeighborOverlayBorderPx + kNeighborOverlayShadowOffsetPx,
-			-halfH - kNeighborOverlayBorderPx + kNeighborOverlayShadowOffsetPx,
-			tileW + kNeighborOverlayBorderPx * 2.0f,
-			tileH + kNeighborOverlayBorderPx * 2.0f);
-
-		ofSetColor(255);
-		ofDrawRectangle(
-			-halfW - kNeighborOverlayBorderPx, -halfH - kNeighborOverlayBorderPx,
-			tileW + kNeighborOverlayBorderPx * 2.0f, tileH + kNeighborOverlayBorderPx * 2.0f);
-
-		drawCoverFit(*slot.thumb, {-halfW, -halfH, tileW, tileH});
-
-		ofNoFill();
-		ofSetColor(0, 0, 0, 70);
-		ofSetLineWidth(1.0f);
-		ofDrawRectangle(-halfW, -halfH, tileW, tileH);
-
-		ofPopMatrix();
-		ofPopStyle();
-	}
+	ofSetColor(255);
+	panel.image->drawSubsection(screenRect.x, screenRect.y, screenRect.width, screenRect.height, srcX, srcY, srcW, srcH);
 }
 
 void drawWidthFitMedia(const ofRectangle& bounds, float mediaW, float mediaH,
@@ -320,8 +315,67 @@ void MediaRenderer::draw(const ofVideoPlayer& player, const ofRectangle& bounds)
 	});
 }
 
+/// Cross-canvas path: current + neighbors cover-fit into 5 equal, touching
+/// panels; the camera pans/zooms through this bigger canvas (reusing the
+/// current clip's own focus/pan target, converted into world coordinates, as
+/// the starting point) so it can drift off current and reveal a neighbor.
+void drawCrossCanvas(const ofImage& image, const ofRectangle& bounds, const ImageDrawHints& hints) {
+	const CrossWorld world = computeCrossWorld(image, hints, bounds);
+	const float panelW = bounds.width;
+	const float panelH = bounds.height;
+
+	ofRectangle viewport = {panelW, panelH, panelW, panelH};
+
+	const float imgW = static_cast<float>(image.getWidth());
+	const float imgH = static_cast<float>(image.getHeight());
+	if (imgW > 0.0f && imgH > 0.0f) {
+		float scale = 1.0f, offsetX = 0.0f, offsetY = 0.0f;
+		coverFitTransform(imgW, imgH, world.currentRect, scale, offsetX, offsetY);
+
+		float targetImgX = imgW * 0.5f;
+		float targetImgY = imgH * 0.5f;
+		if (hints.pan_to_region) {
+			targetImgX = hints.pan_center_x;
+			targetImgY = hints.pan_center_y;
+		} else if (hints.has_focus_rect) {
+			targetImgX = hints.src_x + hints.src_w * 0.5f;
+			targetImgY = hints.src_y + hints.src_h * 0.5f;
+		}
+
+		const float targetWorldX = panelW + offsetX + targetImgX * scale;
+		const float targetWorldY = panelH + offsetY + targetImgY * scale;
+		viewport.x = targetWorldX - panelW * 0.5f;
+		viewport.y = targetWorldY - panelH * 0.5f;
+	}
+
+	animateSrcRect(hints, world.worldW, world.worldH, viewport.x, viewport.y, viewport.width, viewport.height);
+
+	for (const CrossPanel& panel : world.panels) {
+		drawCrossPanelIntersection(panel, viewport, bounds);
+	}
+
+	if (hints.has_debug_region) {
+		float scale = 1.0f, offsetX = 0.0f, offsetY = 0.0f;
+		coverFitTransform(imgW, imgH, world.currentRect, scale, offsetX, offsetY);
+		const float worldX = panelW + offsetX + hints.debug_region_x * scale;
+		const float worldY = panelH + offsetY + hints.debug_region_y * scale;
+		const float worldW = hints.debug_region_w * scale;
+		const float worldH = hints.debug_region_h * scale;
+		const ofRectangle screenRect = mapImageRectToScreen(
+			bounds, viewport.x, viewport.y, viewport.width, viewport.height, worldX, worldY, worldW, worldH);
+		drawDebugRegionOutline(screenRect);
+	}
+}
+
 void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const ImageDrawHints* hints) {
 	if (!image.isAllocated()) {
+		return;
+	}
+
+	const bool hasNeighbors = hints
+		&& (hints->neighbor_prev2 || hints->neighbor_prev1 || hints->neighbor_next1 || hints->neighbor_next2);
+	if (hasNeighbors) {
+		drawCrossCanvas(image, bounds, *hints);
 		return;
 	}
 
@@ -355,7 +409,6 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 			srcX, srcY, srcW, srcH);
 
 		drawDebugRegionForLayout(*hints, bounds, srcX, srcY, srcW, srcH);
-		drawNeighborOverlays(hints, bounds, srcX, srcY, srcW, srcH);
 		return;
 	}
 
@@ -371,7 +424,6 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 			*hints,
 			layout.dest,
 			layout.srcX, layout.srcY, layout.srcW, layout.srcH);
-		drawNeighborOverlays(hints, layout.dest, layout.srcX, layout.srcY, layout.srcW, layout.srcH);
 		return;
 	}
 
@@ -392,6 +444,5 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 			*hints,
 			layout.dest,
 			drawSrcX, drawSrcY, drawSrcW, drawSrcH);
-		drawNeighborOverlays(hints, layout.dest, drawSrcX, drawSrcY, drawSrcW, drawSrcH);
 	}
 }

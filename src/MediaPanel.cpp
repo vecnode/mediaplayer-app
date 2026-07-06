@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <utility>
 
 namespace {
 
@@ -22,91 +21,6 @@ ofRectangle defaultMediaBounds() {
 	const float mediaW = w * kMediaScale;
 	const float mediaH = h * kMediaScale;
 	return {(w - mediaW) * 0.5f, (h - mediaH) * 0.5f, mediaW, mediaH};
-}
-
-/// Finds up to `maxCount` axis-aligned rectangles (full-image pixel coords)
-/// that are genuinely blank page background, via a coarse grid scan sampling
-/// actual pixel brightness - not a proxy via OCR text-region boxes, which
-/// only box specific labeled fields (e.g. "Subject:") and leave real
-/// paragraph text completely unmarked, letting overlays land right on top of
-/// visible content. Sorted largest-first; merges contiguous blank cells
-/// along each row into wider candidates.
-std::vector<metaagent::media::IntRect> computeWhiteAreaRects(const ofPixels& pixels, std::size_t maxCount) {
-	std::vector<metaagent::media::IntRect> result;
-
-	const int width = static_cast<int>(pixels.getWidth());
-	const int height = static_cast<int>(pixels.getHeight());
-	if (width <= 0 || height <= 0) {
-		return result;
-	}
-
-	constexpr int kGridCols = 8;
-	constexpr int kGridRows = 10;
-	constexpr int kSampleStride = 4;
-	constexpr unsigned char kWhiteChannelThreshold = 235;
-	constexpr float kBlankCellFraction = 0.94f;
-
-	const int cellW = width / kGridCols;
-	const int cellH = height / kGridRows;
-	if (cellW <= 0 || cellH <= 0) {
-		return result;
-	}
-
-	bool blank[kGridRows][kGridCols] = {};
-	for (int r = 0; r < kGridRows; ++r) {
-		for (int c = 0; c < kGridCols; ++c) {
-			const int startX = c * cellW;
-			const int startY = r * cellH;
-			const int endX = std::min(width, startX + cellW);
-			const int endY = std::min(height, startY + cellH);
-
-			int sampleCount = 0;
-			int whiteCount = 0;
-			for (int y = startY; y < endY; y += kSampleStride) {
-				for (int x = startX; x < endX; x += kSampleStride) {
-					const ofColor color = pixels.getColor(x, y);
-					++sampleCount;
-					if (color.r >= kWhiteChannelThreshold
-						&& color.g >= kWhiteChannelThreshold
-						&& color.b >= kWhiteChannelThreshold) {
-						++whiteCount;
-					}
-				}
-			}
-
-			blank[r][c] = sampleCount > 0
-				&& (static_cast<float>(whiteCount) / static_cast<float>(sampleCount)) >= kBlankCellFraction;
-		}
-	}
-
-	for (int r = 0; r < kGridRows; ++r) {
-		int c = 0;
-		while (c < kGridCols) {
-			if (!blank[r][c]) {
-				++c;
-				continue;
-			}
-			const int startCol = c;
-			while (c < kGridCols && blank[r][c]) {
-				++c;
-			}
-
-			metaagent::media::IntRect rect;
-			rect.x = startCol * cellW;
-			rect.y = r * cellH;
-			rect.width = (c - startCol) * cellW;
-			rect.height = cellH;
-			result.push_back(rect);
-		}
-	}
-
-	std::sort(result.begin(), result.end(), [](const metaagent::media::IntRect& a, const metaagent::media::IntRect& b) {
-		return (static_cast<int64_t>(a.width) * a.height) > (static_cast<int64_t>(b.width) * b.height);
-	});
-	if (result.size() > maxCount) {
-		result.resize(maxCount);
-	}
-	return result;
 }
 
 } // namespace
@@ -190,24 +104,15 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 			<< selectedRegionIndex_ << " on \"" << loadedPath << "\"";
 	}
 
-	for (std::size_t i = 0; i < neighborOverlayAssignments_.size()
-		&& i < static_cast<std::size_t>(ImageDrawHints::kMaxNeighborOverlays); ++i) {
-		ImageDrawHints::NeighborOverlaySlot& slot = imageDrawHints_.neighbor_overlays[i];
-		const NeighborOverlayAssignment& assignment = neighborOverlayAssignments_[i];
-		slot.has_rect = true;
-		slot.rect_x = static_cast<float>(assignment.rect.x);
-		slot.rect_y = static_cast<float>(assignment.rect.y);
-		slot.rect_w = static_cast<float>(assignment.rect.width);
-		slot.rect_h = static_cast<float>(assignment.rect.height);
-		slot.thumb = assignment.thumb;
-		slot.rotation_deg = assignment.rotationDeg;
-	}
+	imageDrawHints_.neighbor_prev2 = prevThumb2_.isAllocated() ? &prevThumb2_ : nullptr;
+	imageDrawHints_.neighbor_prev1 = prevThumb1_.isAllocated() ? &prevThumb1_ : nullptr;
+	imageDrawHints_.neighbor_next1 = nextThumb1_.isAllocated() ? &nextThumb1_ : nullptr;
+	imageDrawHints_.neighbor_next2 = nextThumb2_.isAllocated() ? &nextThumb2_ : nullptr;
 
 	engine.setImageDrawHints(&imageDrawHints_);
 }
 
-void MediaPanel::refreshNeighborOverlays() {
-	neighborOverlayAssignments_.clear();
+void MediaPanel::refreshNeighborThumbnails() {
 	prevThumb1_.clear();
 	prevThumb2_.clear();
 	nextThumb1_.clear();
@@ -223,55 +128,21 @@ void MediaPanel::refreshNeighborOverlays() {
 	const std::size_t next1Index = library.nextIndex(currentIndex);
 	const std::size_t next2Index = library.nextIndex(next1Index);
 
-	auto loadIfImage = [&](std::size_t index, ofImage& out) -> const ofImage* {
+	auto loadIfImage = [&](std::size_t index, ofImage& out) {
 		if (index == currentIndex) {
-			return nullptr;
+			return;
 		}
 		const MediaClip& clip = library.clipAt(index);
 		if (clip.mediaType != ClipMediaType::Image || clip.absolutePath.empty()) {
-			return nullptr;
+			return;
 		}
-		return out.load(clip.absolutePath) ? &out : nullptr;
+		out.load(clip.absolutePath);
 	};
 
-	std::vector<const ofImage*> images = {
-		loadIfImage(prev1Index, prevThumb1_),
-		loadIfImage(next1Index, nextThumb1_),
-		loadIfImage(prev2Index, prevThumb2_),
-		loadIfImage(next2Index, nextThumb2_),
-	};
-	images.erase(std::remove(images.begin(), images.end(), nullptr), images.end());
-
-	// Randomly occupy the blank spots rather than a fixed prev/next priority
-	// order, so which neighbor lands where varies clip to clip.
-	for (std::size_t i = images.size(); i > 1; --i) {
-		const std::size_t j = static_cast<std::size_t>(ofRandom(static_cast<float>(i)));
-		std::swap(images[i - 1], images[j]);
-	}
-
-	// Real pixel-based blank-area detection (not an OCR-region proxy, which
-	// only boxes specific labeled fields and leaves real paragraph text
-	// unmarked - that let overlays land on top of visible content).
-	const std::string& currentAbsolutePath = library.clipAt(currentIndex).absolutePath;
-	ofPixels currentPixels;
-	std::vector<metaagent::media::IntRect> rects;
-	if (!currentAbsolutePath.empty() && ofLoadImage(currentPixels, currentAbsolutePath)) {
-		rects = computeWhiteAreaRects(currentPixels, static_cast<std::size_t>(ImageDrawHints::kMaxNeighborOverlays));
-	}
-
-	// Small tilt, chosen once per assignment (never re-rolled per frame) so the
-	// collage reads as tastefully scattered prints rather than jittering.
-	constexpr float kMaxTiltDeg = 6.0f;
-
-	std::size_t rectIndex = 0;
-	for (const ofImage* image : images) {
-		if (rectIndex >= rects.size()) {
-			break;
-		}
-		neighborOverlayAssignments_.push_back(
-			{rects[rectIndex], image, ofRandom(-kMaxTiltDeg, kMaxTiltDeg)});
-		++rectIndex;
-	}
+	loadIfImage(prev1Index, prevThumb1_);
+	loadIfImage(prev2Index, prevThumb2_);
+	loadIfImage(next1Index, nextThumb1_);
+	loadIfImage(next2Index, nextThumb2_);
 }
 
 void MediaPanel::pickAnimationForSelection() {
@@ -287,28 +158,36 @@ void MediaPanel::pickAnimationForSelection() {
 	// Randomize the motion character per clip so consecutive clips feel
 	// visually distinct instead of repeating the exact same wobble: some
 	// clips read as mostly vertical ("go down, go up"), some mostly
-	// horizontal, some a diagonal mix of both.
-	float ampX = ofRandom(0.05f, 0.10f);
-	float ampY = ofRandom(0.05f, 0.10f);
-	const int character = static_cast<int>(ofRandom(3.0f)); // 0 vertical, 1 horizontal, 2 mixed
+	// horizontal, some a genuinely diagonal mix of both. Amplitude is large
+	// relative to the cross-canvas world (panels the same size as the
+	// screen) so the camera actually swings out toward a neighbor rather
+	// than just wobbling in place, and frequency is fast enough to feel
+	// alive without being dizzying - a full swing takes roughly 10-18s,
+	// so a clip shown for ~20s gets a full lap plus a bit more, with
+	// constant motion the whole time.
+	float ampX = ofRandom(0.35f, 0.60f);
+	float ampY = ofRandom(0.35f, 0.60f);
+	const int character = static_cast<int>(ofRandom(3.0f)); // 0 vertical, 1 horizontal, 2 diagonal
 	if (character == 0) {
-		ampX *= 0.2f;
-		ampY *= 1.5f;
+		ampX *= 0.4f;
+		ampY *= 1.3f;
 	} else if (character == 1) {
-		ampX *= 1.5f;
-		ampY *= 0.2f;
+		ampX *= 1.3f;
+		ampY *= 0.4f;
 	}
 
 	animAmpX_ = ampX;
 	animAmpY_ = ampY;
-	animFreqX_ = ofRandom(0.16f, 0.36f);
-	animFreqY_ = ofRandom(0.14f, 0.32f);
+	// ~20% slower than the initial dynamic pass (same amplitude, less
+	// dizzying pace) - a full swing now takes roughly 12-22s.
+	animFreqX_ = ofRandom(0.28f, 0.52f);
+	animFreqY_ = ofRandom(0.24f, 0.48f);
 	animPhaseX_ = ofRandom(0.0f, TWO_PI);
 	animPhaseY_ = ofRandom(0.0f, TWO_PI);
 
 	if (selectedAnimMode_ == kAnimSlowZoom) {
-		animZoomAmp_ = ofRandom(0.08f, 0.18f);
-		animZoomFreq_ = ofRandom(0.05f, 0.12f);
+		animZoomAmp_ = ofRandom(0.15f, 0.30f);
+		animZoomFreq_ = ofRandom(0.08f, 0.16f);
 		animZoomPhase_ = ofRandom(0.0f, TWO_PI);
 	} else {
 		animZoomAmp_ = 0.0f;
@@ -323,7 +202,7 @@ void MediaPanel::onClipSwitched(const MediaPlaybackEngine::SwitchResult& result)
 	syncLoadedPath();
 	selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
 	pickAnimationForSelection();
-	refreshNeighborOverlays();
+	refreshNeighborThumbnails();
 	refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 
 	if (clipChangedHandler) {
@@ -359,7 +238,7 @@ void MediaPanel::setup() {
 	syncLoadedPath();
 	selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
 	pickAnimationForSelection();
-	refreshNeighborOverlays();
+	refreshNeighborThumbnails();
 	refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 }
 
@@ -389,7 +268,7 @@ bool MediaPanel::openClipAtIndex(std::size_t index, bool primePreviewFrame) {
 		syncLoadedPath();
 		selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
 		pickAnimationForSelection();
-		refreshNeighborOverlays();
+		refreshNeighborThumbnails();
 		refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 	}
 	return opened;

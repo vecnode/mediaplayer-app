@@ -42,24 +42,16 @@ struct ImageDrawHints {
 	float anim_zoom_freq = 0.08f;
 	float anim_zoom_phase = 0.0f;
 
-	/// One neighbor clip's thumbnail overlaid into a blank/text-free spot on
-	/// the current image (see MediaCorpusProvider::emptyAreaRects). Rect is in
-	/// full-image pixel coordinates, so it tracks the current image's pan/zoom
-	/// automatically - the overlay stays glued to the same spot as it animates.
-	struct NeighborOverlaySlot {
-		bool has_rect = false;
-		float rect_x = 0.0f;
-		float rect_y = 0.0f;
-		float rect_w = 0.0f;
-		float rect_h = 0.0f;
-		const ofImage* thumb = nullptr; // non-owning
-		// Small fixed per-slot tilt (degrees), chosen once when the slot is
-		// assigned so the "photo print" look reads as scattered but stable -
-		// never re-rolled or animated frame to frame.
-		float rotation_deg = 0.0f;
-	};
-	static constexpr int kMaxNeighborOverlays = 4;
-	NeighborOverlaySlot neighbor_overlays[kMaxNeighborOverlays];
+	/// Neighbor clips (2 before, 2 after the current one), non-owning. When any
+	/// are set, MediaRenderer switches to a mosaic layout: the current image
+	/// and all present neighbors are laid out as equal-size grid cells (see
+	/// MediaRenderer::draw) instead of the current image filling the whole
+	/// frame - each neighbor is shown whole (no cropping), sized to actually
+	/// be readable rather than a tiny overlay stamp.
+	const ofImage* neighbor_prev2 = nullptr;
+	const ofImage* neighbor_prev1 = nullptr;
+	const ofImage* neighbor_next1 = nullptr;
+	const ofImage* neighbor_next2 = nullptr;
 };
 
 enum SelectionAnimMode {
