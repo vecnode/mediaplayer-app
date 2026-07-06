@@ -182,9 +182,18 @@ void drawCoverFit(const ofImage& thumb, const ofRectangle& screenRect) {
 	thumb.drawSubsection(screenRect.x, screenRect.y, screenRect.width, screenRect.height, srcX, srcY, srcW, srcH);
 }
 
+// Hard cap on each overlay's on-screen footprint - small "photo print"
+// snippets, never a large patch, however big the blank area behind them is.
+constexpr float kNeighborOverlayMaxPx = 50.0f;
+constexpr float kNeighborOverlayBorderPx = 3.0f;
+constexpr float kNeighborOverlayShadowOffsetPx = 2.5f;
+
 /// Draws each neighbor-clip overlay (if present) mapped from full-image pixel
 /// coordinates into the current on-screen crop window, so overlays stay
-/// glued to their assigned blank spot as the current image pans/zooms.
+/// glued to their assigned blank spot as the current image pans/zooms. Each
+/// is rendered as a small (<= 50x50px), bordered, drop-shadowed, gently
+/// tilted print - a tasteful collage accent, never competing with the
+/// current image for attention.
 void drawNeighborOverlays(
 	const ImageDrawHints* hints,
 	const ofRectangle& dest,
@@ -198,20 +207,46 @@ void drawNeighborOverlays(
 			continue;
 		}
 
-		const ofRectangle screenRect = mapImageRectToScreen(
+		const ofRectangle mapped = mapImageRectToScreen(
 			dest, cropSrcX, cropSrcY, cropSrcW, cropSrcH,
 			slot.rect_x, slot.rect_y, slot.rect_w, slot.rect_h);
-		if (screenRect.width <= 2.0f || screenRect.height <= 2.0f) {
+		if (mapped.width <= 2.0f || mapped.height <= 2.0f) {
 			continue;
 		}
 
+		const float tileW = std::min(mapped.width, kNeighborOverlayMaxPx);
+		const float tileH = std::min(mapped.height, kNeighborOverlayMaxPx);
+		const float centerX = mapped.x + mapped.width * 0.5f;
+		const float centerY = mapped.y + mapped.height * 0.5f;
+		const float halfW = tileW * 0.5f;
+		const float halfH = tileH * 0.5f;
+
 		ofPushStyle();
-		ofSetColor(255, 235);
-		drawCoverFit(*slot.thumb, screenRect);
+		ofPushMatrix();
+		ofTranslate(centerX, centerY);
+		ofRotateDeg(slot.rotation_deg);
+
+		ofFill();
+		ofSetColor(0, 0, 0, 80);
+		ofDrawRectangle(
+			-halfW - kNeighborOverlayBorderPx + kNeighborOverlayShadowOffsetPx,
+			-halfH - kNeighborOverlayBorderPx + kNeighborOverlayShadowOffsetPx,
+			tileW + kNeighborOverlayBorderPx * 2.0f,
+			tileH + kNeighborOverlayBorderPx * 2.0f);
+
+		ofSetColor(255);
+		ofDrawRectangle(
+			-halfW - kNeighborOverlayBorderPx, -halfH - kNeighborOverlayBorderPx,
+			tileW + kNeighborOverlayBorderPx * 2.0f, tileH + kNeighborOverlayBorderPx * 2.0f);
+
+		drawCoverFit(*slot.thumb, {-halfW, -halfH, tileW, tileH});
+
 		ofNoFill();
-		ofSetColor(255, 255, 255, 90);
-		ofSetLineWidth(1.5f);
-		ofDrawRectangle(screenRect);
+		ofSetColor(0, 0, 0, 70);
+		ofSetLineWidth(1.0f);
+		ofDrawRectangle(-halfW, -halfH, tileW, tileH);
+
+		ofPopMatrix();
 		ofPopStyle();
 	}
 }

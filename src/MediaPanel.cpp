@@ -114,6 +114,7 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 		slot.rect_w = static_cast<float>(assignment.rect.width);
 		slot.rect_h = static_cast<float>(assignment.rect.height);
 		slot.thumb = assignment.thumb;
+		slot.rotation_deg = assignment.rotationDeg;
 	}
 
 	engine.setImageDrawHints(&imageDrawHints_);
@@ -159,6 +160,10 @@ void MediaPanel::refreshNeighborOverlays() {
 	const std::vector<metaagent::media::IntRect> rects = corpus_.emptyAreaRects(
 		loadedPath, static_cast<std::size_t>(ImageDrawHints::kMaxNeighborOverlays));
 
+	// Small tilt, chosen once per assignment (never re-rolled per frame) so the
+	// collage reads as tastefully scattered prints rather than jittering.
+	constexpr float kMaxTiltDeg = 6.0f;
+
 	std::size_t rectIndex = 0;
 	for (const ofImage* image : images) {
 		if (!image) {
@@ -167,7 +172,8 @@ void MediaPanel::refreshNeighborOverlays() {
 		if (rectIndex >= rects.size()) {
 			break;
 		}
-		neighborOverlayAssignments_.push_back({rects[rectIndex], image});
+		neighborOverlayAssignments_.push_back(
+			{rects[rectIndex], image, ofRandom(-kMaxTiltDeg, kMaxTiltDeg)});
 		++rectIndex;
 	}
 }

@@ -79,6 +79,7 @@ private:
 	struct NeighborOverlayAssignment {
 		metaagent::media::IntRect rect;
 		const ofImage* thumb = nullptr;
+		float rotationDeg = 0.0f;
 	};
 	ofImage prevThumb1_;
 	ofImage prevThumb2_;
