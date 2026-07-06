@@ -158,9 +158,18 @@ void drawDebugRegionForLayout(
 /// as `bounds`. The camera (viewport) is also `bounds`-sized and pans/zooms
 /// through this bigger virtual canvas via the exact same animation math as
 /// the single-image case, so it can drift off the current panel and reveal
-/// a neighbor at the screen edge - no gaps, no black borders, since every
-/// panel is cover-fit (crop-to-fill, never letterboxed) and panels are
-/// contiguous.
+/// a neighbor at the screen edge.
+///
+/// The 3x3 world's four corners (e.g. above-and-right of current, where the
+/// top and right panels would meet diagonally) have no neighbor of their
+/// own - there's no "diagonal" clip in a linear prev/next sequence. Rather
+/// than block diagonal camera movement to avoid exposing those corners,
+/// the top/bottom panels are widened to the FULL world width and the
+/// left/right panels to the full world height, so each corner is actually
+/// covered twice over (drawn last wins) with real, if more cropped, image
+/// content - free diagonal movement, never a gap. Draw order: top, bottom,
+/// left, right, then current last (always fully within its own cell, so it
+/// never gets overdrawn).
 struct CrossPanel {
 	const ofImage* image = nullptr;
 	ofRectangle worldRect;
@@ -169,6 +178,7 @@ struct CrossPanel {
 struct CrossWorld {
 	float worldW = 0.0f;
 	float worldH = 0.0f;
+	ofRectangle currentRect;
 	CrossPanel panels[5];
 };
 
@@ -178,12 +188,13 @@ CrossWorld computeCrossWorld(const ofImage& current, const ImageDrawHints& hints
 	const float panelH = bounds.height;
 	world.worldW = panelW * 3.0f;
 	world.worldH = panelH * 3.0f;
+	world.currentRect = {panelW, panelH, panelW, panelH};
 
-	world.panels[0] = {&current, {panelW, panelH, panelW, panelH}};              // center
-	world.panels[1] = {hints.neighbor_prev1, {panelW, 0.0f, panelW, panelH}};     // top
-	world.panels[2] = {hints.neighbor_prev2, {0.0f, panelH, panelW, panelH}};     // left
-	world.panels[3] = {hints.neighbor_next1, {panelW * 2.0f, panelH, panelW, panelH}}; // right
-	world.panels[4] = {hints.neighbor_next2, {panelW, panelH * 2.0f, panelW, panelH}}; // bottom
+	world.panels[0] = {hints.neighbor_prev1, {0.0f, 0.0f, world.worldW, panelH}};              // top, full width
+	world.panels[1] = {hints.neighbor_next2, {0.0f, panelH * 2.0f, world.worldW, panelH}};      // bottom, full width
+	world.panels[2] = {hints.neighbor_prev2, {0.0f, 0.0f, panelW, world.worldH}};                // left, full height
+	world.panels[3] = {hints.neighbor_next1, {panelW * 2.0f, 0.0f, panelW, world.worldH}};       // right, full height
+	world.panels[4] = {&current, world.currentRect};                                             // center, drawn last
 	return world;
 }
 
@@ -319,7 +330,7 @@ void drawCrossCanvas(const ofImage& image, const ofRectangle& bounds, const Imag
 	const float imgH = static_cast<float>(image.getHeight());
 	if (imgW > 0.0f && imgH > 0.0f) {
 		float scale = 1.0f, offsetX = 0.0f, offsetY = 0.0f;
-		coverFitTransform(imgW, imgH, world.panels[0].worldRect, scale, offsetX, offsetY);
+		coverFitTransform(imgW, imgH, world.currentRect, scale, offsetX, offsetY);
 
 		float targetImgX = imgW * 0.5f;
 		float targetImgY = imgH * 0.5f;
@@ -339,25 +350,13 @@ void drawCrossCanvas(const ofImage& image, const ofRectangle& bounds, const Imag
 
 	animateSrcRect(hints, world.worldW, world.worldH, viewport.x, viewport.y, viewport.width, viewport.height);
 
-	// Never let the camera drift diagonally toward a corner - each neighbor
-	// only touches current on ONE side, so a corner has no image at all.
-	// Locking whichever axis has the smaller offset back to center keeps the
-	// camera exactly on the horizontal or vertical arm of the cross.
-	const float offsetFromCenterX = viewport.x - panelW;
-	const float offsetFromCenterY = viewport.y - panelH;
-	if (std::abs(offsetFromCenterX) > std::abs(offsetFromCenterY)) {
-		viewport.y = panelH - (viewport.height - panelH) * 0.5f;
-	} else {
-		viewport.x = panelW - (viewport.width - panelW) * 0.5f;
-	}
-
 	for (const CrossPanel& panel : world.panels) {
 		drawCrossPanelIntersection(panel, viewport, bounds);
 	}
 
 	if (hints.has_debug_region) {
 		float scale = 1.0f, offsetX = 0.0f, offsetY = 0.0f;
-		coverFitTransform(imgW, imgH, world.panels[0].worldRect, scale, offsetX, offsetY);
+		coverFitTransform(imgW, imgH, world.currentRect, scale, offsetX, offsetY);
 		const float worldX = panelW + offsetX + hints.debug_region_x * scale;
 		const float worldY = panelH + offsetY + hints.debug_region_y * scale;
 		const float worldW = hints.debug_region_w * scale;

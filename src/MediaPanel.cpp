@@ -158,28 +158,34 @@ void MediaPanel::pickAnimationForSelection() {
 	// Randomize the motion character per clip so consecutive clips feel
 	// visually distinct instead of repeating the exact same wobble: some
 	// clips read as mostly vertical ("go down, go up"), some mostly
-	// horizontal, some a diagonal mix of both.
-	float ampX = ofRandom(0.05f, 0.10f);
-	float ampY = ofRandom(0.05f, 0.10f);
-	const int character = static_cast<int>(ofRandom(3.0f)); // 0 vertical, 1 horizontal, 2 mixed
+	// horizontal, some a genuinely diagonal mix of both. Amplitude is large
+	// relative to the cross-canvas world (panels the same size as the
+	// screen) so the camera actually swings out toward a neighbor rather
+	// than just wobbling in place, and frequency is fast enough to feel
+	// alive without being dizzying - a full swing takes roughly 10-18s,
+	// so a clip shown for ~20s gets a full lap plus a bit more, with
+	// constant motion the whole time.
+	float ampX = ofRandom(0.35f, 0.60f);
+	float ampY = ofRandom(0.35f, 0.60f);
+	const int character = static_cast<int>(ofRandom(3.0f)); // 0 vertical, 1 horizontal, 2 diagonal
 	if (character == 0) {
-		ampX *= 0.2f;
-		ampY *= 1.5f;
+		ampX *= 0.4f;
+		ampY *= 1.3f;
 	} else if (character == 1) {
-		ampX *= 1.5f;
-		ampY *= 0.2f;
+		ampX *= 1.3f;
+		ampY *= 0.4f;
 	}
 
 	animAmpX_ = ampX;
 	animAmpY_ = ampY;
-	animFreqX_ = ofRandom(0.16f, 0.36f);
-	animFreqY_ = ofRandom(0.14f, 0.32f);
+	animFreqX_ = ofRandom(0.35f, 0.65f);
+	animFreqY_ = ofRandom(0.30f, 0.60f);
 	animPhaseX_ = ofRandom(0.0f, TWO_PI);
 	animPhaseY_ = ofRandom(0.0f, TWO_PI);
 
 	if (selectedAnimMode_ == kAnimSlowZoom) {
-		animZoomAmp_ = ofRandom(0.08f, 0.18f);
-		animZoomFreq_ = ofRandom(0.05f, 0.12f);
+		animZoomAmp_ = ofRandom(0.15f, 0.30f);
+		animZoomFreq_ = ofRandom(0.10f, 0.20f);
 		animZoomPhase_ = ofRandom(0.0f, TWO_PI);
 	} else {
 		animZoomAmp_ = 0.0f;
