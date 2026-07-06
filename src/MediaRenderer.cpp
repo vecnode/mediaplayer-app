@@ -153,6 +153,69 @@ void drawDebugRegionForLayout(
 	drawDebugRegionOutline(screenRect);
 }
 
+/// Cover-fits `thumb` into `screenRect` (scales to fill, cropping overflow on
+/// one axis), centered - no animation of its own since it inherits the host
+/// rect's motion for free (the rect is mapped through the current image's own
+/// pan/zoom crop every frame).
+void drawCoverFit(const ofImage& thumb, const ofRectangle& screenRect) {
+	const float imgW = static_cast<float>(thumb.getWidth());
+	const float imgH = static_cast<float>(thumb.getHeight());
+	if (imgW <= 0.0f || imgH <= 0.0f) {
+		return;
+	}
+
+	const float destAspect = screenRect.width / screenRect.height;
+	const float imgAspect = imgW / imgH;
+
+	float srcW = imgW;
+	float srcH = imgH;
+	if (imgAspect > destAspect) {
+		srcH = imgH;
+		srcW = imgH * destAspect;
+	} else {
+		srcW = imgW;
+		srcH = imgW / destAspect;
+	}
+	const float srcX = (imgW - srcW) * 0.5f;
+	const float srcY = (imgH - srcH) * 0.5f;
+
+	thumb.drawSubsection(screenRect.x, screenRect.y, screenRect.width, screenRect.height, srcX, srcY, srcW, srcH);
+}
+
+/// Draws each neighbor-clip overlay (if present) mapped from full-image pixel
+/// coordinates into the current on-screen crop window, so overlays stay
+/// glued to their assigned blank spot as the current image pans/zooms.
+void drawNeighborOverlays(
+	const ImageDrawHints* hints,
+	const ofRectangle& dest,
+	float cropSrcX, float cropSrcY, float cropSrcW, float cropSrcH) {
+	if (!hints || cropSrcW <= 0.0f || cropSrcH <= 0.0f) {
+		return;
+	}
+
+	for (const auto& slot : hints->neighbor_overlays) {
+		if (!slot.has_rect || !slot.thumb || !slot.thumb->isAllocated()) {
+			continue;
+		}
+
+		const ofRectangle screenRect = mapImageRectToScreen(
+			dest, cropSrcX, cropSrcY, cropSrcW, cropSrcH,
+			slot.rect_x, slot.rect_y, slot.rect_w, slot.rect_h);
+		if (screenRect.width <= 2.0f || screenRect.height <= 2.0f) {
+			continue;
+		}
+
+		ofPushStyle();
+		ofSetColor(255, 235);
+		drawCoverFit(*slot.thumb, screenRect);
+		ofNoFill();
+		ofSetColor(255, 255, 255, 90);
+		ofSetLineWidth(1.5f);
+		ofDrawRectangle(screenRect);
+		ofPopStyle();
+	}
+}
+
 void drawWidthFitMedia(const ofRectangle& bounds, float mediaW, float mediaH,
 	const std::function<void(const WidthFitLayout&)>& drawMedia) {
 	ofSetColor(0);
@@ -257,6 +320,7 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 			srcX, srcY, srcW, srcH);
 
 		drawDebugRegionForLayout(*hints, bounds, srcX, srcY, srcW, srcH);
+		drawNeighborOverlays(hints, bounds, srcX, srcY, srcW, srcH);
 		return;
 	}
 
@@ -272,6 +336,7 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 			*hints,
 			layout.dest,
 			layout.srcX, layout.srcY, layout.srcW, layout.srcH);
+		drawNeighborOverlays(hints, layout.dest, layout.srcX, layout.srcY, layout.srcW, layout.srcH);
 		return;
 	}
 
@@ -292,5 +357,6 @@ void MediaRenderer::draw(const ofImage& image, const ofRectangle& bounds, const 
 			*hints,
 			layout.dest,
 			drawSrcX, drawSrcY, drawSrcW, drawSrcH);
+		drawNeighborOverlays(hints, layout.dest, drawSrcX, drawSrcY, drawSrcW, drawSrcH);
 	}
 }

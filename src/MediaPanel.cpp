@@ -104,7 +104,72 @@ void MediaPanel::refreshImageDrawHints(const ofRectangle& bounds) {
 			<< selectedRegionIndex_ << " on \"" << loadedPath << "\"";
 	}
 
+	for (std::size_t i = 0; i < neighborOverlayAssignments_.size()
+		&& i < static_cast<std::size_t>(ImageDrawHints::kMaxNeighborOverlays); ++i) {
+		ImageDrawHints::NeighborOverlaySlot& slot = imageDrawHints_.neighbor_overlays[i];
+		const NeighborOverlayAssignment& assignment = neighborOverlayAssignments_[i];
+		slot.has_rect = true;
+		slot.rect_x = static_cast<float>(assignment.rect.x);
+		slot.rect_y = static_cast<float>(assignment.rect.y);
+		slot.rect_w = static_cast<float>(assignment.rect.width);
+		slot.rect_h = static_cast<float>(assignment.rect.height);
+		slot.thumb = assignment.thumb;
+	}
+
 	engine.setImageDrawHints(&imageDrawHints_);
+}
+
+void MediaPanel::refreshNeighborOverlays() {
+	neighborOverlayAssignments_.clear();
+	prevThumb1_.clear();
+	prevThumb2_.clear();
+	nextThumb1_.clear();
+	nextThumb2_.clear();
+
+	if (library.empty() || !engine.isCurrentClipImage() || loadedPath.empty()) {
+		return;
+	}
+
+	const std::size_t currentIndex = engine.currentIndex();
+	const std::size_t prev1Index = library.previousIndex(currentIndex);
+	const std::size_t prev2Index = library.previousIndex(prev1Index);
+	const std::size_t next1Index = library.nextIndex(currentIndex);
+	const std::size_t next2Index = library.nextIndex(next1Index);
+
+	auto loadIfImage = [&](std::size_t index, ofImage& out) -> const ofImage* {
+		if (index == currentIndex) {
+			return nullptr;
+		}
+		const MediaClip& clip = library.clipAt(index);
+		if (clip.mediaType != ClipMediaType::Image || clip.absolutePath.empty()) {
+			return nullptr;
+		}
+		return out.load(clip.absolutePath) ? &out : nullptr;
+	};
+
+	// Priority order: the immediate neighbors get the biggest blank spots
+	// found; the "2 away" neighbors take whatever's left.
+	const ofImage* images[4] = {
+		loadIfImage(prev1Index, prevThumb1_),
+		loadIfImage(next1Index, nextThumb1_),
+		loadIfImage(prev2Index, prevThumb2_),
+		loadIfImage(next2Index, nextThumb2_),
+	};
+
+	const std::vector<metaagent::media::IntRect> rects = corpus_.emptyAreaRects(
+		loadedPath, static_cast<std::size_t>(ImageDrawHints::kMaxNeighborOverlays));
+
+	std::size_t rectIndex = 0;
+	for (const ofImage* image : images) {
+		if (!image) {
+			continue;
+		}
+		if (rectIndex >= rects.size()) {
+			break;
+		}
+		neighborOverlayAssignments_.push_back({rects[rectIndex], image});
+		++rectIndex;
+	}
 }
 
 void MediaPanel::pickAnimationForSelection() {
@@ -156,6 +221,7 @@ void MediaPanel::onClipSwitched(const MediaPlaybackEngine::SwitchResult& result)
 	syncLoadedPath();
 	selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
 	pickAnimationForSelection();
+	refreshNeighborOverlays();
 	refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 
 	if (clipChangedHandler) {
@@ -191,6 +257,7 @@ void MediaPanel::setup() {
 	syncLoadedPath();
 	selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
 	pickAnimationForSelection();
+	refreshNeighborOverlays();
 	refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 }
 
@@ -220,6 +287,7 @@ bool MediaPanel::openClipAtIndex(std::size_t index, bool primePreviewFrame) {
 		syncLoadedPath();
 		selectedRegionIndex_ = corpus_.pickRandomRegionIndex(loadedPath);
 		pickAnimationForSelection();
+		refreshNeighborOverlays();
 		refreshImageDrawHints(lastDrawBounds_.width > 0.0f ? lastDrawBounds_ : defaultMediaBounds());
 	}
 	return opened;

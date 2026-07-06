@@ -3,6 +3,7 @@
 #include "media/corpus.hpp"
 #include "ofMain.h"
 #include <string>
+#include <vector>
 
 /// Loads PDF_TEXT.md + OBJS_TEXT.md from the media-player data folder (lazy).
 class MediaCorpusProvider {
@@ -33,6 +34,13 @@ public:
 
 	std::size_t regionCountForClip(const std::string& clipPath) const;
 	std::size_t entriesWithRegionsCount() const;
+
+	/// Finds up to `maxCount` axis-aligned rectangles (full-image pixel coords)
+	/// with no detected text nearby, via a coarse grid scan over the clip's
+	/// text regions, sorted largest-first. Used to place neighbor-image
+	/// overlays without covering the current image's own text/content.
+	std::vector<metaagent::media::IntRect> emptyAreaRects(
+		const std::string& clipPath, std::size_t maxCount) const;
 
 private:
 	void ensureLoaded() const;
