@@ -81,6 +81,9 @@ PROJECT_LDFLAGS += -ld3d11 -ldxgi -lxaudio2_8
 # Copies MinGW DLLs only — does not touch bin/data (your dataset stays intact).
 # PROJECT_AFTER is executed as a shell recipe, not a make target name.
 PROJECT_AFTER = $(MAKE) copy-msys2-runtime-dlls
+# App icon (title bar + taskbar) — same .ico for Debug and Release.
+PROJECT_RELEASE_ICON = assets/icon/icon.ico
+PROJECT_DEBUG_ICON = assets/icon/icon.ico
 endif
 
 ifndef METAAGENT_ROOT
