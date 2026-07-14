@@ -1,8 +1,9 @@
-# media-player-cpp
+# mediaplayer-cpp
+
+![Language](https://img.shields.io/github/languages/top/vecnode/mediaplayer-cpp)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 
 OpenFrameworks media player for images and video, with optional OCR subtitles and an HTTP control API.
-
-## Media files
 
 Put assets in **`bin/data/`** (PNG, JPG, MP4, etc.). Builds do not delete this folder.
 

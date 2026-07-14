@@ -39,6 +39,12 @@ void ofApp::setup() {
 	regionPanToggle.addListener(this, &ofApp::onRegionPanToggled);
 	animateToggle.addListener(this, &ofApp::onAnimateToggled);
 
+	// Bigger GUI: larger font + taller rows/wider panel so labels don't crowd.
+	ofxGuiSetFont(OF_TTF_MONO, 16, true, true);
+	ofxGuiSetDefaultWidth(280);
+	ofxGuiSetDefaultHeight(32);
+	ofxGuiSetTextPadding(10);
+
 	gui.setup("Controls");
 	gui.add(cycleButton.setup("Next"));
 	gui.add(randomButton.setup("Random"));
@@ -48,6 +54,7 @@ void ofApp::setup() {
 	gui.add(regionPanToggle.setup("Region pan", true));
 	gui.add(animateToggle.setup("Animate", true));
 	gui.add(statusLabel.setup("clip", ""));
+	gui.add(hintLabel.setup("hint", "'G' to hide/show"));
 
 	refreshGuiFromController();
 }

@@ -47,5 +47,6 @@ private:
 	ofxToggle regionPanToggle;
 	ofxToggle animateToggle;
 	ofxLabel statusLabel;
+	ofxLabel hintLabel;
 	bool guiVisible_ = true;
 };
